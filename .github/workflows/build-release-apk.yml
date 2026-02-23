@@ -1,0 +1,102 @@
+name: Build And Release APK
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '可选：发布到 GitHub Release 的 tag（例如 v0.1.0）'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Build release APK
+        run: gradle :app:assembleRelease --no-daemon
+
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxa-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Sign release APK (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload signed artifact
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxa-release-signed
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          INPUT_TAG="${{ github.event.inputs.release_tag }}"
+          REF_TAG="${GITHUB_REF_NAME}"
+          if [ -n "$INPUT_TAG" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=$REF_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish APK to GitHub Release (signed)
+        if: ${{ steps.release_tag.outputs.tag != '' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Fluxa ${{ steps.release_tag.outputs.tag }}
+          files: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          generate_release_notes: true
+
+      - name: Publish APK to GitHub Release (unsigned fallback)
+        if: ${{ steps.release_tag.outputs.tag != '' && secrets.ANDROID_KEYSTORE_BASE64 == '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Fluxa ${{ steps.release_tag.outputs.tag }}
+          files: app/build/outputs/apk/release/app-release-unsigned.apk
+          generate_release_notes: true
+
+      - name: Build summary
+        run: |
+          echo "## Fluxa 构建结果" >> $GITHUB_STEP_SUMMARY
+          echo "- 产物（Artifacts）：fluxa-release-unsigned" >> $GITHUB_STEP_SUMMARY
+          echo "- 产物（Artifacts）：fluxa-release-signed（配置签名 secrets 后）" >> $GITHUB_STEP_SUMMARY
+          echo "- 若提供 tag（推送 v* 或手动输入 release_tag），会同步上传到 GitHub Release" >> $GITHUB_STEP_SUMMARY
