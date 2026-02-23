@@ -88,3 +88,17 @@ Fluxa 是一个面向沉浸阅读的 Android RSS 阅读器。
 - 增加并发互斥，避免同一分支重复任务互相覆盖。
 - 增加 `timeout`、APK 文件存在性校验、Artifact 缺失即报错。
 - Release 发布仅在非 PR 且存在 tag 时触发。
+
+
+### 本次针对构建失败的修复
+
+为提升 GitHub Actions 构建成功率，工作流已补充：
+
+- 显式安装 Android SDK（`android-actions/setup-android@v3`）
+- 显式安装并确认许可：
+  - `platform-tools`
+  - `platforms;android-35`
+  - `build-tools;35.0.0`
+- 构建日志改为 `--stacktrace --info`，便于快速定位失败点
+
+如果你之前失败是因为 Runner 上缺少对应 SDK/Build Tools 或 license 未接受，这次应可修复。
