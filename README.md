@@ -14,6 +14,8 @@ Fluxa 是一个面向沉浸阅读的 Android RSS 阅读器。
   - 收藏/取消收藏
 - Room 缓存：文章离线读取（先读本地，再网络刷新）
 - Feed 列表基础交互：下拉刷新、滑动操作、加载更多
+- 阅读页字体设置：S / M / L / XL 快速切换
+- 动画增强：列表状态切换、列表项位移动画、标签显隐动画、页面转场动画
 - GitHub Actions：构建 release APK，并支持按 tag 发布到 GitHub Release
 
 ## 关键配置

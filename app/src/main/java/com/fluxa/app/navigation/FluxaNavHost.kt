@@ -1,6 +1,11 @@
 package com.fluxa.app.navigation
 
 import android.content.Context
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideIntoContainer
+import androidx.compose.animation.slideOutOfContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
@@ -26,7 +31,13 @@ fun FluxaNavHost(
     val startDestination = if (tokenStore.isLoggedIn()) Routes.FeedList else Routes.Login
 
     NavHost(navController = navController, startDestination = startDestination) {
-        composable(Routes.Login) {
+        composable(
+            route = Routes.Login,
+            enterTransition = { fadeIn() },
+            exitTransition = {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left) + fadeOut()
+            }
+        ) {
             val oauthManager = OAuthManager()
             LoginRoute(
                 oauthCode = oauthCode,
@@ -40,13 +51,27 @@ fun FluxaNavHost(
             )
         }
 
-        composable(Routes.FeedList) {
+        composable(
+            route = Routes.FeedList,
+            enterTransition = {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left) + fadeIn()
+            },
+            popExitTransition = {
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right) + fadeOut()
+            }
+        ) {
             FeedListRoute(onOpenArticle = { id -> navController.navigate(Routes.article(id)) })
         }
 
         composable(
             route = Routes.Article,
-            arguments = listOf(navArgument("id") { type = NavType.StringType })
+            arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            enterTransition = {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left) + fadeIn()
+            },
+            popEnterTransition = {
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right) + fadeIn()
+            }
         ) {
             ArticleRoute()
         }

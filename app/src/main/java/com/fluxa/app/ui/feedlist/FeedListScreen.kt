@@ -1,8 +1,12 @@
 package com.fluxa.app.ui.feedlist
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.animateItemPlacement
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Star
@@ -137,16 +142,22 @@ private fun FeedListScreen(
                     }
                 }
             ) {
-                ArticleCard(article = article, onClick = { onArticleClick(article.id) })
+                ArticleCard(
+                    article = article,
+                    onClick = { onArticleClick(article.id) },
+                    modifier = Modifier.animateItemPlacement(
+                        animationSpec = spring(stiffness = Spring.StiffnessLow)
+                    )
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ArticleCard(article: Article, onClick: () -> Unit) {
+private fun ArticleCard(article: Article, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
@@ -167,18 +178,19 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp)
             )
-            if (!article.isRead || article.isStarred) {
-                Text(
-                    text = buildString {
-                        if (!article.isRead) append("未读")
-                        if (article.isStarred) {
-                            if (isNotEmpty()) append(" · ")
-                            append("已收藏")
-                        }
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+            AnimatedVisibility(visible = !article.isRead || article.isStarred) {
+                Row(modifier = Modifier.padding(top = 8.dp)) {
+                    Text(
+                        text = buildString {
+                            if (!article.isRead) append("未读")
+                            if (article.isStarred) {
+                                if (isNotEmpty()) append(" · ")
+                                append("已收藏")
+                            }
+                        },
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
             }
         }
     }

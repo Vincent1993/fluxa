@@ -14,6 +14,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class FontScalePreset(val cssPx: Int) {
+    Small(16),
+    Medium(18),
+    Large(20),
+    ExtraLarge(22)
+}
+
 @HiltViewModel
 class ArticleViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -24,10 +31,17 @@ class ArticleViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<Article>>(UiState.Loading)
     val uiState: StateFlow<UiState<Article>> = _uiState.asStateFlow()
 
+    private val _fontScalePreset = MutableStateFlow(FontScalePreset.Medium)
+    val fontScalePreset: StateFlow<FontScalePreset> = _fontScalePreset.asStateFlow()
+
     init {
         viewModelScope.launch {
             val article = repository.getPagedArticles().first().firstOrNull { it.id == articleId }
             _uiState.value = article?.let { UiState.Success(it) } ?: UiState.Error("Article not found")
         }
+    }
+
+    fun setFontScalePreset(preset: FontScalePreset) {
+        _fontScalePreset.value = preset
     }
 }
