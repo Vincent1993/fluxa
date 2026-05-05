@@ -3,6 +3,8 @@ package com.fluxa.app.data.repository
 import com.fluxa.app.data.api.InoreaderApi
 import com.fluxa.app.data.local.ArticleDao
 import com.fluxa.app.data.local.ArticleEntity
+import com.fluxa.app.data.local.SyncStateDao
+import com.fluxa.app.data.local.SyncStateEntity
 import com.fluxa.app.domain.model.Article
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,7 +16,8 @@ import javax.inject.Singleton
 class InoreaderArticleRepository @Inject constructor(
     private val api: InoreaderApi,
     private val authRepository: AuthRepository,
-    private val articleDao: ArticleDao
+    private val articleDao: ArticleDao,
+    private val syncStateDao: SyncStateDao
 ) : ArticleRepository {
 
     private var continuation: String? = null
@@ -25,11 +28,18 @@ class InoreaderArticleRepository @Inject constructor(
 
     override suspend fun refresh() {
         authRepository.refreshIfNeeded()
-        continuation = null
+        val state = syncStateDao.getBySource(SYNC_SOURCE)
         val response = api.getReadingStream(count = PAGE_SIZE, continuation = null)
         continuation = response.continuation
-        articleDao.clearAll()
-        articleDao.upsertAll(response.items.map { it.toEntity() })
+        articleDao.upsertPreservingLocalFields(response.items.map { it.toEntity() })
+        syncStateDao.upsert(
+            SyncStateEntity(
+                source = SYNC_SOURCE,
+                cursor = response.continuation,
+                lastSyncAtEpochMillis = System.currentTimeMillis(),
+                syncToken = state?.syncToken
+            )
+        )
     }
 
     override suspend fun loadMore() {
@@ -37,7 +47,15 @@ class InoreaderArticleRepository @Inject constructor(
         val token = continuation ?: return
         val response = api.getReadingStream(count = PAGE_SIZE, continuation = token)
         continuation = response.continuation
-        articleDao.upsertAll(response.items.map { it.toEntity() })
+        articleDao.upsertPreservingLocalFields(response.items.map { it.toEntity() })
+        syncStateDao.upsert(
+            SyncStateEntity(
+                source = SYNC_SOURCE,
+                cursor = response.continuation,
+                lastSyncAtEpochMillis = System.currentTimeMillis(),
+                syncToken = null
+            )
+        )
     }
 
     override suspend fun markRead(id: String) {
@@ -86,5 +104,6 @@ class InoreaderArticleRepository @Inject constructor(
         const val PAGE_SIZE = 20
         const val READ_TAG = "user/-/state/com.google/read"
         const val STARRED_TAG = "user/-/state/com.google/starred"
+        const val SYNC_SOURCE = "inoreader:reading-list"
     }
 }
