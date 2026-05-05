@@ -31,6 +31,7 @@ interface InoreaderApi {
     suspend fun editTag(
         @Field("i") itemId: String,
         @Field("a") addTag: String? = null,
-        @Field("r") removeTag: String? = null
+        @Field("r") removeTag: String? = null,
+        @Field("annotation") annotation: String? = null
     )
 }

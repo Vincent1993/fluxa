@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.fluxa.app.data.local.ArticleDao
 import com.fluxa.app.data.local.FluxaDatabase
+import com.fluxa.app.data.local.PendingActionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,9 +18,14 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FluxaDatabase {
-        return Room.databaseBuilder(context, FluxaDatabase::class.java, "fluxa.db").build()
+        return Room.databaseBuilder(context, FluxaDatabase::class.java, "fluxa.db")
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
     fun provideArticleDao(db: FluxaDatabase): ArticleDao = db.articleDao()
+
+    @Provides
+    fun providePendingActionDao(db: FluxaDatabase): PendingActionDao = db.pendingActionDao()
 }

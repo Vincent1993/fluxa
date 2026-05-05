@@ -9,4 +9,9 @@ interface ArticleRepository {
     suspend fun loadMore()
     suspend fun markRead(id: String)
     suspend fun toggleStar(id: String)
+    suspend fun addHighlight(articleId: String, text: String)
+    suspend fun addNote(articleId: String, note: String)
+    suspend fun archive(articleId: String)
+    suspend fun saveForLater(articleId: String)
+    suspend fun syncPendingActions()
 }

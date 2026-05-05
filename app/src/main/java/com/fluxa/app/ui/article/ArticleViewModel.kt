@@ -5,6 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fluxa.app.data.repository.ArticleRepository
 import com.fluxa.app.domain.model.Article
+import com.fluxa.app.domain.usecase.AddHighlightUseCase
+import com.fluxa.app.domain.usecase.AddNoteUseCase
+import com.fluxa.app.domain.usecase.ArchiveArticleUseCase
+import com.fluxa.app.domain.usecase.SaveForLaterUseCase
 import com.fluxa.app.ui.components.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +21,11 @@ import javax.inject.Inject
 @HiltViewModel
 class ArticleViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val repository: ArticleRepository
+    private val repository: ArticleRepository,
+    private val addHighlightUseCase: AddHighlightUseCase,
+    private val addNoteUseCase: AddNoteUseCase,
+    private val archiveArticleUseCase: ArchiveArticleUseCase,
+    private val saveForLaterUseCase: SaveForLaterUseCase
 ) : ViewModel() {
     private val articleId: String = checkNotNull(savedStateHandle["id"])
 
@@ -30,4 +38,9 @@ class ArticleViewModel @Inject constructor(
             _uiState.value = article?.let { UiState.Success(it) } ?: UiState.Error("Article not found")
         }
     }
+
+    fun addHighlight(text: String) = viewModelScope.launch { addHighlightUseCase(articleId, text) }
+    fun addNote(note: String) = viewModelScope.launch { addNoteUseCase(articleId, note) }
+    fun archive() = viewModelScope.launch { archiveArticleUseCase(articleId) }
+    fun saveForLater() = viewModelScope.launch { saveForLaterUseCase(articleId) }
 }

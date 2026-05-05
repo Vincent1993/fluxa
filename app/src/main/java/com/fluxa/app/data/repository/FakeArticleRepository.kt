@@ -55,4 +55,17 @@ class FakeArticleRepository @Inject constructor() : ArticleRepository {
     override suspend fun toggleStar(id: String) {
         articles.update { list -> list.map { if (it.id == id) it.copy(isStarred = !it.isStarred) else it } }
     }
+
+    override suspend fun addHighlight(articleId: String, text: String) = Unit
+
+    override suspend fun addNote(articleId: String, note: String) = Unit
+
+    override suspend fun archive(articleId: String) {
+        markRead(articleId)
+    }
+
+    override suspend fun saveForLater(articleId: String) = Unit
+
+    override suspend fun syncPendingActions() = Unit
 }
+
