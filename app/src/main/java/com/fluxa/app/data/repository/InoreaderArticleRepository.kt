@@ -76,7 +76,7 @@ class InoreaderArticleRepository @Inject constructor(
     override suspend fun archive(articleId: String) {
         articleDao.markRead(articleId)
         executeOrQueue(articleId, PendingActionType.Archive) {
-            api.editTag(itemId = articleId, addTag = ARCHIVED_TAG)
+            api.editTag(itemId = articleId, removeTag = READING_LIST_TAG)
         }
     }
 
@@ -114,7 +114,7 @@ class InoreaderArticleRepository @Inject constructor(
             }
             PendingActionType.AddHighlight -> api.editTag(itemId = action.articleId, addTag = HIGHLIGHT_TAG, annotation = action.payload)
             PendingActionType.AddNote -> api.editTag(itemId = action.articleId, addTag = NOTE_TAG, annotation = action.payload)
-            PendingActionType.Archive -> api.editTag(itemId = action.articleId, addTag = ARCHIVED_TAG)
+            PendingActionType.Archive -> api.editTag(itemId = action.articleId, removeTag = READING_LIST_TAG)
             PendingActionType.SaveForLater -> api.editTag(itemId = action.articleId, addTag = SAVED_TAG)
         }
     }
@@ -147,7 +147,7 @@ class InoreaderArticleRepository @Inject constructor(
         const val STARRED_TAG = "user/-/state/com.google/starred"
         const val HIGHLIGHT_TAG = "user/-/state/com.fluxa/highlight"
         const val NOTE_TAG = "user/-/state/com.fluxa/note"
-        const val ARCHIVED_TAG = "user/-/state/com.google/kept-unread"
+        const val READING_LIST_TAG = "user/-/state/com.google/reading-list"
         const val SAVED_TAG = "user/-/state/com.fluxa/save-for-later"
     }
 }
