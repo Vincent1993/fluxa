@@ -62,11 +62,19 @@ class InoreaderArticleRepository @Inject constructor(
         return ArticleEntity(
             id = id,
             title = title.orEmpty().ifBlank { "(无标题)" },
+            url = "https://www.inoreader.com/article/$id",
+            author = "",
+            excerpt = summary?.content.orEmpty().trim().take(200),
             feedName = origin?.title.orEmpty().ifBlank { "Inoreader" },
             publishedAtEpochSeconds = published ?: (System.currentTimeMillis() / 1000),
             isRead = categories?.contains(READ_TAG) == true,
             isStarred = categories?.contains(STARRED_TAG) == true,
-            contentHtml = summary?.content.orEmpty()
+            contentHtml = summary?.content.orEmpty(),
+            readingProgress = if (categories?.contains(READ_TAG) == true) 1f else 0f,
+            archivedAtEpochSeconds = null,
+            savedAtEpochSeconds = null,
+            lastOpenedAtEpochSeconds = null,
+            wordCount = summary?.content.orEmpty().split("\\s+".toRegex()).count { it.isNotBlank() }
         )
     }
 
@@ -74,11 +82,19 @@ class InoreaderArticleRepository @Inject constructor(
         return Article(
             id = id,
             title = title,
+            url = url,
+            author = author,
+            excerpt = excerpt,
             feedName = feedName,
             publishedAt = Instant.ofEpochSecond(publishedAtEpochSeconds),
             isRead = isRead,
             isStarred = isStarred,
-            contentHtml = contentHtml
+            contentHtml = contentHtml,
+            readingProgress = readingProgress,
+            archivedAt = archivedAtEpochSeconds?.let(Instant::ofEpochSecond),
+            savedAt = savedAtEpochSeconds?.let(Instant::ofEpochSecond),
+            lastOpenedAt = lastOpenedAtEpochSeconds?.let(Instant::ofEpochSecond),
+            wordCount = wordCount
         )
     }
 
