@@ -24,9 +24,11 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.DismissDirection
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -51,11 +53,21 @@ fun FeedListRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val filterState by viewModel.filterState.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
 
     Scaffold(
         topBar = {
             LargeTopAppBar(
                 title = { Text("Fluxa") },
+                actions = {
+                    FilterChip(selected = filterState.isRead == false, onClick = {
+                        viewModel.updateFilterState(filterState.copy(isRead = if (filterState.isRead == false) null else false))
+                    }, label = { Text("未读") })
+                    FilterChip(selected = filterState.isStarred == true, onClick = {
+                        viewModel.updateFilterState(filterState.copy(isStarred = if (filterState.isStarred == true) null else true))
+                    }, label = { Text("收藏") })
+                },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
@@ -73,6 +85,10 @@ fun FeedListRoute(
                     UiState.Empty -> MessageState("暂无文章")
                     is UiState.Error -> MessageState(state.message)
                     is UiState.Success -> FeedListScreen(
+                        filterState = filterState,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::updateSearchQuery,
+                        onFilterStateChange = viewModel::updateFilterState,
                         articles = state.data,
                         onArticleClick = {
                             viewModel.markRead(it)
@@ -91,6 +107,10 @@ fun FeedListRoute(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FeedListScreen(
+    filterState: FeedListViewModel.FilterState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onFilterStateChange: (FeedListViewModel.FilterState) -> Unit,
     articles: List<Article>,
     onArticleClick: (String) -> Unit,
     onMarkRead: (String) -> Unit,
@@ -102,6 +122,25 @@ private fun FeedListScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("搜索") },
+                singleLine = true
+            )
+        }
+        item {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !filterState.source.isNullOrBlank(), onClick = {
+                    onFilterStateChange(filterState.copy(source = if (filterState.source.isNullOrBlank()) "feed/tech" else null))
+                }, label = { Text("来源") })
+                FilterChip(selected = !filterState.tag.isNullOrBlank(), onClick = {
+                    onFilterStateChange(filterState.copy(tag = if (filterState.tag.isNullOrBlank()) "tech" else null))
+                }, label = { Text("标签") })
+            }
+        }
         itemsIndexed(items = articles, key = { _, item -> item.id }) { index, article ->
             if (index >= articles.lastIndex - 2) onReachEnd()
 

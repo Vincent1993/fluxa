@@ -5,6 +5,15 @@ import kotlinx.coroutines.flow.Flow
 
 interface ArticleRepository {
     fun getPagedArticles(): Flow<List<Article>>
+    fun getFilteredArticles(
+        isRead: Boolean?,
+        isStarred: Boolean?,
+        source: String?,
+        tag: String?,
+        startDateEpochSeconds: Long?,
+        endDateEpochSeconds: Long?,
+        searchQuery: String
+    ): Flow<List<Article>>
     suspend fun refresh()
     suspend fun loadMore()
     suspend fun markRead(id: String)

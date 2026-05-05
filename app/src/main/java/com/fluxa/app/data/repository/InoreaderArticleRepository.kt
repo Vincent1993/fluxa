@@ -23,6 +23,26 @@ class InoreaderArticleRepository @Inject constructor(
         return articleDao.observeAll().map { entities -> entities.map { it.toDomain() } }
     }
 
+    override fun getFilteredArticles(
+        isRead: Boolean?,
+        isStarred: Boolean?,
+        source: String?,
+        tag: String?,
+        startDateEpochSeconds: Long?,
+        endDateEpochSeconds: Long?,
+        searchQuery: String
+    ): Flow<List<Article>> {
+        return articleDao.observeFiltered(
+            isRead = isRead,
+            isStarred = isStarred,
+            source = source,
+            tag = tag,
+            startDateEpochSeconds = startDateEpochSeconds,
+            endDateEpochSeconds = endDateEpochSeconds,
+            searchQuery = searchQuery.trim()
+        ).map { entities -> entities.map { it.toDomain() } }
+    }
+
     override suspend fun refresh() {
         authRepository.refreshIfNeeded()
         continuation = null
@@ -66,6 +86,8 @@ class InoreaderArticleRepository @Inject constructor(
             publishedAtEpochSeconds = published ?: (System.currentTimeMillis() / 1000),
             isRead = categories?.contains(READ_TAG) == true,
             isStarred = categories?.contains(STARRED_TAG) == true,
+            source = origin?.streamId.orEmpty(),
+            tags = categories.orEmpty().joinToString(separator = ","),
             contentHtml = summary?.content.orEmpty()
         )
     }
@@ -78,6 +100,8 @@ class InoreaderArticleRepository @Inject constructor(
             publishedAt = Instant.ofEpochSecond(publishedAtEpochSeconds),
             isRead = isRead,
             isStarred = isStarred,
+            source = source,
+            tags = tags,
             contentHtml = contentHtml
         )
     }

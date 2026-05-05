@@ -19,12 +19,24 @@ class FakeArticleRepository @Inject constructor() : ArticleRepository {
                 publishedAt = Instant.now().minusSeconds((index * 300).toLong()),
                 isRead = index > 5,
                 isStarred = index % 3 == 0,
+                source = if (index % 2 == 0) "feed/tech" else "feed/news",
+                tags = if (index % 2 == 0) "tech,android" else "news,world",
                 contentHtml = "<h1>Fluxa</h1><p>This is sample article $index.</p>"
             )
         }
     )
 
     override fun getPagedArticles(): Flow<List<Article>> = articles
+
+    override fun getFilteredArticles(
+        isRead: Boolean?,
+        isStarred: Boolean?,
+        source: String?,
+        tag: String?,
+        startDateEpochSeconds: Long?,
+        endDateEpochSeconds: Long?,
+        searchQuery: String
+    ): Flow<List<Article>> = articles
 
     override suspend fun refresh() {
         // Placeholder for network + room sync
@@ -42,6 +54,8 @@ class FakeArticleRepository @Inject constructor() : ArticleRepository {
                 publishedAt = Instant.now().minusSeconds((index * 400).toLong()),
                 isRead = false,
                 isStarred = false,
+                source = "feed/more",
+                tags = "more",
                 contentHtml = "<h2>Article $index</h2><p>More content placeholder.</p>"
             )
         }

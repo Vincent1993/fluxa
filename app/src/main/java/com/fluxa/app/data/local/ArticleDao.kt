@@ -11,6 +11,35 @@ interface ArticleDao {
     @Query("SELECT * FROM articles ORDER BY publishedAtEpochSeconds DESC")
     fun observeAll(): Flow<List<ArticleEntity>>
 
+    @Query(
+        """
+        SELECT * FROM articles
+        WHERE (:isRead IS NULL OR isRead = :isRead)
+          AND (:isStarred IS NULL OR isStarred = :isStarred)
+          AND (:source IS NULL OR source = :source)
+          AND (:tag IS NULL OR tags LIKE '%' || :tag || '%')
+          AND (:startDateEpochSeconds IS NULL OR publishedAtEpochSeconds >= :startDateEpochSeconds)
+          AND (:endDateEpochSeconds IS NULL OR publishedAtEpochSeconds <= :endDateEpochSeconds)
+          AND (
+            :searchQuery = '' OR
+            title LIKE '%' || :searchQuery || '%' OR
+            contentHtml LIKE '%' || :searchQuery || '%' OR
+            feedName LIKE '%' || :searchQuery || '%' OR
+            tags LIKE '%' || :searchQuery || '%'
+          )
+        ORDER BY publishedAtEpochSeconds DESC
+        """
+    )
+    fun observeFiltered(
+        isRead: Boolean?,
+        isStarred: Boolean?,
+        source: String?,
+        tag: String?,
+        startDateEpochSeconds: Long?,
+        endDateEpochSeconds: Long?,
+        searchQuery: String
+    ): Flow<List<ArticleEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<ArticleEntity>)
 
