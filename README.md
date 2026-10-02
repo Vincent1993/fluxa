@@ -75,5 +75,21 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 - 会话过期需重新登录，保留离线缓存和待同步操作。
 - 真实 NewsBlur 账号的登录、添加订阅与最终服务端状态仍需用户安装后验收。
 
-CI 验证测试、lint 与 debug APK；release job 仅在 tag 或明确 release_tag 时发布。
-本次仅本地工作，没有推送、合并 PR、部署或发布。
+## GitHub Actions 自动构建
+
+[Android CI](.github/workflows/android-ci.yml) 对分支 push、目标为 main 的 PR 和手动触发运行：
+JUnit / Robolectric 单元测试、Android lint、Debug APK 构建。无需 NewsBlur 密码、API Key 或签名 secrets。
+使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
+只有 main 写缓存，其他分支及 PR 只读。旧的 Release 工作流已移除，没有自动签名或发布。
+
+获批准推送并运行后，在仓库 Actions → Android CI → 对应运行的 Artifacts 下载：
+
+- `fluxa-debug-apk`：解压得到可安装的 `app-debug.apk`，仅全部验证通过时上传。
+- `fluxa-validation`：JUnit XML / HTML 与 lint 报告，测试失败时也尝试上传。
+
+产物保留 14 天。首次将新工作流合入默认分支 main 后，Actions 页面才会显示
+“Run workflow”手动按钮；分支 push / PR 可先自动运行。详细说明见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
+
+CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名相同，
+不能直接覆盖不同签名的已有安装；不要为安装 CI 产物卸载而丢失缓存。
+工作流只验证并保存构建产物，不合并 PR 或创建正式 Release。
