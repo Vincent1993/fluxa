@@ -14,6 +14,7 @@
 - 离线阅读缓存正文，重启保留标记；恢复网络后刷新或点待同步重试。
 - 本地标题、来源、正文搜索，全部 / 未读 / 收藏筛选。
 - 阅读页返回、收藏与 16 / 18 / 20 / 24 号字体。
+- 可选后台刷新：默认关闭，账户与同步设置中开启；每小时尝试同步全部启用订阅。
 
 单账号模型：首次成功登录后缓存绑定用户名，再次登录需使用同一账号。
 旧 Inoreader 的 `fluxa.db` 与令牌保留，当前 NewsBlur 使用独立的 `newsblur.db`，
@@ -62,8 +63,9 @@ python3 scripts/verify-migration-sql.py
 ```
 
 真实执行结果、报告与 APK 指纹见 [验证记录](docs/validation-2026-10-02.md)。
-2026-10-02 的本地验证已通过：debug APK、26/26 单元测试、7/7 API 35 设备测试；
-lint 为 0 错误 / 17 警告。真实 NewsBlur 用户账号尚未联调。
+2026-10-02 的后台刷新版本本地验证已通过：三渠道 APK 各自构建、各 34/34 单元测试、
+9/9 API 35 设备测试；各渠道 lint 为 0 错误 / 19 警告。
+详见 [后台刷新验证](docs/background-sync-validation-2026-10-02.md)。真实 NewsBlur 用户账号尚未联调。
 包含 Room/Robolectric、MockWebServer 协议与离线重放、ViewModel、
 AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离线重启验证。
 测试夹具不代替真实 NewsBlur 用户账号验收。
@@ -72,7 +74,7 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 
 - 仅缓存正文 HTML，远程图片和原文链接需要网络。
 - 本地搜索仅覆盖已经同步的文章。
-- 手动 / 页面进入刷新，无后台轮询；已读以最多 5 条批次重放。
+- 手动 / 页面进入刷新，后台刷新可选。后台任务需不计费网络和充足电量，系统可能延迟；已读以最多 5 条批次重放。
 - 首版同步最多 64 个启用订阅；没有 OPML、删除订阅或账号切换。
 - 无自动缓存清理；长期使用数据库会增长。
 - 会话过期需重新登录，保留离线缓存和待同步操作。

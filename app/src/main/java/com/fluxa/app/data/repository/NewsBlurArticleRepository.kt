@@ -35,15 +35,17 @@ class NewsBlurArticleRepository @Inject constructor(
     override fun observePendingCount() = db.pendingActionDao().observeCount()
 
     override suspend fun refresh() = network.withLock { refreshLocked() }
+    override suspend fun refreshInBackground() = network.withLock { refreshLocked(allFeeds = true) }
     override suspend fun selectSource(sourceId: String?) = network.withLock {
         source = sourceId
         refreshLocked()
     }
-    private suspend fun refreshLocked() {
+    private suspend fun refreshLocked(allFeeds: Boolean = false) {
         requireSession()
         refreshFeeds()
         replayForRefresh()
-        for (feed in selectedFeeds()) fetchPage(feed, 1)
+        val feeds = if (allFeeds) db.subscriptionDao().getAll() else selectedFeeds()
+        for (feed in feeds) fetchPage(feed, 1)
     }
     override suspend fun loadMore() = network.withLock {
         requireSession()

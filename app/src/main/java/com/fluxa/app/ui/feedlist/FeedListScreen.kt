@@ -14,11 +14,14 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fluxa.app.domain.model.Article
+import com.fluxa.app.data.sync.BackgroundSyncSettings
+import com.fluxa.app.data.sync.BackgroundSyncScheduler
 
 @Composable
 fun FeedListRoute(
@@ -27,10 +30,17 @@ fun FeedListRoute(
     viewModel: FeedListViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current.applicationContext
+    val syncSettings = remember(context) { BackgroundSyncSettings(context) }
+    val syncScheduler = remember(context) { BackgroundSyncScheduler(context, syncSettings) }
+    var backgroundEnabled by remember { mutableStateOf(syncSettings.enabled) }
     FeedListScreen(state, onOpenArticle, onLogin, viewModel::refresh, viewModel::loadMore,
         viewModel::setQuery, viewModel::setFilter, viewModel::selectSource,
         viewModel::markRead, viewModel::toggleStar, viewModel::addSubscription,
-        viewModel::retryPending)
+        viewModel::retryPending, backgroundEnabled) {
+            syncScheduler.setEnabled(it)
+            backgroundEnabled = syncSettings.enabled
+        }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,16 +57,19 @@ fun FeedListScreen(
     onMarkRead: (String) -> Unit,
     onToggleStar: (String) -> Unit,
     onSubscribe: (String) -> Unit,
-    onRetryPending: () -> Unit
+    onRetryPending: () -> Unit,
+    backgroundEnabled: Boolean = false,
+    onBackgroundSync: (Boolean) -> Unit = {}
 ) {
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     Scaffold(topBar = {
         TopAppBar(title = { Text("Fluxa") }, actions = {
             IconButton(onClick = { showSources = true }) { Icon(Icons.AutoMirrored.Outlined.List, "选择订阅") }
             IconButton(onClick = { showAdd = true }) { Icon(Icons.Outlined.Add, "添加订阅") }
             IconButton(onClick = onRefresh, enabled = !state.busy) { Icon(Icons.Outlined.Refresh, "刷新") }
-            IconButton(onClick = onLogin) { Icon(Icons.Outlined.AccountCircle, "登录 NewsBlur") }
+            IconButton(onClick = { showSettings = true }) { Icon(Icons.Outlined.Settings, "账户与同步设置") }
         })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -122,6 +135,20 @@ fun FeedListScreen(
     }
     if (showAdd) AddSubscriptionDialog(state.busy, { showAdd = false }) {
         onSubscribe(it); showAdd = false
+    }
+    if (showSettings) {
+        AlertDialog(onDismissRequest = { showSettings = false }, title = { Text("账户与同步") },
+            text = {
+                Column {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("后台刷新", modifier = Modifier.weight(1f).padding(top = 12.dp))
+                        Switch(backgroundEnabled, onBackgroundSync, modifier = Modifier)
+                    }
+                    Text("每小时尝试；仅不计费网络且电量充足时。系统可能延迟。需已有登录会话。",
+                        style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { showSettings = false; onLogin() }) { Text("登录 NewsBlur") }
+                }
+            }, confirmButton = { TextButton(onClick = { showSettings = false }) { Text("完成") } })
     }
 }
 

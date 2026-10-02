@@ -66,6 +66,26 @@ class NewsBlurFlowTest {
     }
     @After fun teardown() { server.shutdown(); db.close() }
 
+    @Test fun backgroundRefreshFetchesAllFeedsAndKeepsForegroundSelection() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                calls += path
+                if (path == "/reader/feeds") return MockResponse().setBody(
+                    """{"feeds":{"12":{"feed_title":"One","active":true},"13":{"feed_title":"Two","active":true}}}""")
+                return MockResponse().setBody("""{"stories":[{"story_hash":"${path.takeLast(2)}:fixture","story_feed_id":${path.takeLast(2)},"story_title":"Fixture","story_timestamp":"1700000000"}]}""")
+            }
+        }
+        repository.selectSource("12")
+        calls.clear()
+        repository.refreshInBackground()
+        assertTrue(calls.contains("/reader/feed/12"))
+        assertTrue(calls.contains("/reader/feed/13"))
+        calls.clear()
+        repository.loadMore()
+        assertEquals(listOf("/reader/feed/12"), calls)
+    }
+
     @Test fun subscriptionRefreshReadStarOfflineReplayAndPaginationWorkTogether() = runBlocking {
         repository.addSubscription("https://example.org/rss")
         repository.refresh()
