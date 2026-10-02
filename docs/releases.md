@@ -44,9 +44,21 @@ After approving generation, use JDK 17 and run interactively:
 bash scripts/prepare-preview-key.sh
 ```
 
-This prompts for a password without adding it to command arguments. PKCS12 uses the same store
+On this Mac, first enter the checkout and activate the existing isolated JDK:
+
+```sh
+cd /Users/admin/Documents/Codex/2026-10-02/task/fluxa
+source ../toolchain/env.sh
+bash scripts/prepare-preview-key.sh
+```
+
+Use your own interactive Terminal; do not pipe or redirect this script or enable terminal recording.
+It requires terminal stdin/stdout/stderr, disables shell command tracing and leaves password
+prompts connected to the terminal. This prompts for a password without adding it to command arguments.
+PKCS12 uses the same store
 and key password. It creates .signing/preview.p12, a one-line Base64 file and a public certificate
-report, refuses overwrites, and applies private file permissions. Keep an encrypted backup of
+report plus preview-public.pem (public certificate only), refuses overwrites, and applies private file permissions.
+Only the password-free public certificate inspection is redirected to the report. Keep an encrypted backup of
 the keystore and password outside this checkout. Losing the key prevents compatible updates.
 
 In GitHub → Settings → Environments → preview, the owner configures:

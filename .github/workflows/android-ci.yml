@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 scripts/release.py version
           python3 scripts/test_release.py
+          python3 scripts/test_prepare_key.py
           python3 scripts/release.py preflight --channel preview --tag "$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import release; v=release.read_version(open("version.properties").read()); print(release.expected(v, "preview")["tag"])')"
       - name: Check new PR branch naming
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number > 6 && github.actor != 'dependabot[bot]' }}

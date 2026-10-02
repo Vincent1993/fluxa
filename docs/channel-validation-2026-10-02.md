@@ -15,6 +15,7 @@ No persistent release key was generated or uploaded as part of these checks.
 | APK signing boundary | Debug signature verified; Preview/Stable unsigned in credential-free builds |
 | Missing signing configuration | Required-signing build refused before producing a signed artifact |
 | Release policy tests | 10/10: invalid versions/tags, stale code, wrong source/tag commit, unsigned/wrong/debug certificate |
+| Key takeover helper guards | Stub keytool only: terminal/output restrictions, no private-byte output, private permissions, overwrite refusal; no real key created |
 | Workflow checks | YAML parsed; shell and embedded Python syntax checked; all action SHAs pinned |
 | Workflow permissions | Only manual release trigger; ordinary CI read-only; secrets confined to signer, writer confined to draft job |
 
