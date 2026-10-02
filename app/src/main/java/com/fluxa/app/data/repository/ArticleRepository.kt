@@ -8,6 +8,7 @@ import com.fluxa.app.domain.model.Subscription
 interface ArticleRepository {
     fun getPagedArticles(): Flow<List<Article>>
     suspend fun refresh()
+    suspend fun refreshInBackground() = refresh()
     suspend fun loadMore()
     suspend fun markRead(id: String)
     suspend fun toggleStar(id: String)

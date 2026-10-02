@@ -1,6 +1,7 @@
 package com.fluxa.app
 
 import androidx.compose.ui.test.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.fluxa.app.domain.model.Article
 import com.fluxa.app.ui.feedlist.*
@@ -41,6 +42,24 @@ class FeedListUiTest {
         compose.onNodeWithContentDescription("添加订阅").performClick()
         compose.onNodeWithText("添加 RSS 订阅").assertIsDisplayed()
         compose.onNodeWithText("取消").performClick()
-        compose.onNodeWithContentDescription("登录 NewsBlur").assertIsDisplayed()
+        compose.onNodeWithContentDescription("账户与同步设置").performClick()
+        compose.onNodeWithText("登录 NewsBlur").assertIsDisplayed()
+    }
+
+    @Test fun backgroundRefreshCanBeEnabledAndDisabledFromSettings() {
+        var changed: Boolean? = null
+        compose.setContent {
+            var enabled by remember { mutableStateOf(false) }
+            FluxaTheme {
+                FeedListScreen(FeedListState(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                    backgroundEnabled = enabled, onBackgroundSync = { enabled = it; changed = it })
+            }
+        }
+        compose.onNodeWithContentDescription("账户与同步设置").performClick()
+        val toggle = compose.onNode(isToggleable())
+        toggle.assertIsOff().performClick().assertIsOn()
+        assertEquals(true, changed)
+        toggle.performClick().assertIsOff()
+        assertEquals(false, changed)
     }
 }

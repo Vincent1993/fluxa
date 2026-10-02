@@ -20,9 +20,16 @@ No persistent release key was generated or uploaded as part of these checks.
 | Workflow permissions | Only manual release trigger; ordinary CI read-only; secrets confined to signer, writer confined to draft job |
 
 These checks validate code and unsigned distribution builds. They do not establish that a
-signed Preview can be installed. Persistent signing, secure user credential setup, main merge,
+signed Preview can be installed. Persistent signing, secure user credential setup,
 remote release dispatch, draft artifact download/install and public publication are subsequent
 gated steps. GitHub CI must confirm the final pushed commit independently.
+
+PR #7 was subsequently merged from reviewed head e8a6e709 to main 632e73ae.
+[Final PR CI](https://github.com/Vincent1993/fluxa/actions/runs/37046014174)
+and [main CI](https://github.com/Vincent1993/fluxa/actions/runs/37046792093)
+both completed successfully for the policy and all three channel jobs.
+The downloaded main Debug report confirms 26 tests with zero failures and lint with
+zero errors / 18 warnings. No signing environment, key, tag or Release was created.
 
 Actions download-artifact v8.0.1 is pinned to 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c;
 its official action.yml inputs and default digest-mismatch=error were checked.
