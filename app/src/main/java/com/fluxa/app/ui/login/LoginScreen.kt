@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fluxa.app.ui.components.UiState
+import com.fluxa.app.BuildConfig
 
 @Composable
 fun LoginRoute(onOpenCache: () -> Unit, onLoginSuccess: () -> Unit,
@@ -58,5 +59,7 @@ fun LoginScreen(state: UiState<Unit>, onSignIn: (String, String) -> Unit,
         TextButton(onClick = onCreateAccount) { Text("在 NewsBlur 网站创建账号") }
         Text("密码不会保存。登录会话仅保存在此设备的加密存储中。",
             style = MaterialTheme.typography.bodySmall)
+        Text("${BuildConfig.CHANNEL} · ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 12.dp))
     }
 }

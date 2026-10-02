@@ -17,6 +17,29 @@ fun configString(name: String): String {
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
+val appVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+val baseVersion = appVersion.getProperty("VERSION_NAME")
+require(baseVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) { "Invalid VERSION_NAME" }
+val appVersionCode = appVersion.getProperty("VERSION_CODE").toInt()
+require(appVersionCode in 1..2100000000) { "Invalid VERSION_CODE" }
+val previewNumber = appVersion.getProperty("PREVIEW_NUMBER").toInt()
+require(previewNumber > 0) { "Invalid PREVIEW_NUMBER" }
+val buildCommit = providers.environmentVariable("FLUXA_BUILD_COMMIT").orElse("local").get()
+require(buildCommit == "local" || buildCommit.matches(Regex("[a-f0-9]{40}"))) { "Invalid build commit" }
+val commitSuffix = buildCommit.take(7)
+val signingChannel = providers.environmentVariable("FLUXA_SIGNING_CHANNEL").orNull
+val signingPath = providers.environmentVariable("FLUXA_KEYSTORE_PATH").orNull
+val signingRequired = providers.gradleProperty("fluxa.requireSigning").orNull == "true"
+if (signingPath != null || signingRequired) {
+    require(signingChannel in listOf("preview", "stable")) { "Signing channel must be preview or stable" }
+    require(!signingPath.isNullOrBlank() && file(signingPath).isFile) { "A persistent signing keystore is required" }
+    listOf("FLUXA_KEYSTORE_PASSWORD", "FLUXA_KEY_ALIAS", "FLUXA_KEY_PASSWORD").forEach {
+        require(!providers.environmentVariable(it).orNull.isNullOrEmpty()) { "Missing signing configuration: $it" }
+    }
+}
+
 android {
     namespace = "com.fluxa.app"
     compileSdk = 35
@@ -25,8 +48,10 @@ android {
         applicationId = "com.fluxa.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = appVersionCode
+        versionName = baseVersion
+        manifestPlaceholders["appLabel"] = "Fluxa"
+        buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -38,13 +63,42 @@ android {
         buildConfigField("String", "INOREADER_REDIRECT_URI", "\"fluxa://oauth/callback\"")
     }
 
+    if (signingPath != null) {
+        signingConfigs.create("distribution") {
+            storeFile = file(signingPath)
+            storePassword = providers.environmentVariable("FLUXA_KEYSTORE_PASSWORD").get()
+            keyAlias = providers.environmentVariable("FLUXA_KEY_ALIAS").get()
+            keyPassword = providers.environmentVariable("FLUXA_KEY_PASSWORD").get()
+        }
+    }
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev+$commitSuffix"
+            manifestPlaceholders["appLabel"] = "Fluxa Debug"
+            buildConfigField("String", "CHANNEL", "\"debug\"")
+        }
         release {
             isMinifyEnabled = false
+            isDebuggable = false
+            buildConfigField("String", "CHANNEL", "\"stable\"")
+            if (signingChannel == "stable" && signingPath != null) {
+                signingConfig = signingConfigs.getByName("distribution")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview.$previewNumber+$commitSuffix"
+            manifestPlaceholders["appLabel"] = "Fluxa Preview"
+            matchingFallbacks += "release"
+            buildConfigField("String", "CHANNEL", "\"preview\"")
+            signingConfig = if (signingChannel == "preview" && signingPath != null)
+                signingConfigs.getByName("distribution") else null
         }
     }
     compileOptions {

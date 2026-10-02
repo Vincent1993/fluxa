@@ -1,6 +1,7 @@
 package com.fluxa.app.di
 
 import com.fluxa.app.data.api.AuthHeaderInterceptor
+import com.fluxa.app.BuildConfig
 import com.fluxa.app.data.api.InoreaderApi
 import com.fluxa.app.data.api.NewsBlurApi
 import com.fluxa.app.data.api.NewsBlurJsonAdapter
@@ -37,7 +38,7 @@ object NetworkModule {
     @Singleton
     fun provideOkHttp(authHeaderInterceptor: AuthHeaderInterceptor): OkHttpClient {
         val logger = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         return OkHttpClient.Builder()
             .addInterceptor(authHeaderInterceptor)

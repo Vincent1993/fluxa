@@ -32,13 +32,16 @@ sdk.dir=/absolute/path/to/android-sdk
 export JAVA_HOME=/absolute/path/to/jdk17/Contents/Home
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.fluxa.app/.MainActivity
+adb shell am start -n com.fluxa.app.debug/com.fluxa.app.MainActivity
 # API 26+ 测试设备：
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
 本次 Mac 的隔离工具链位于仓库同级的 `../toolchain`，可先 `source ../toolchain/env.sh`。
-已有安装升级应使用相同签名；为解决签名冲突而卸载会删除本地数据。
+Debug 的包名为 com.fluxa.app.debug；Preview 为 com.fluxa.app.preview；
+Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道升级需要固定签名。
+版本由 version.properties 管理；新发布的 versionCode 必须递增。
+渠道、签名和发布操作见 [发布指南](docs/releases.md)，分支规范见 [贡献约定](CONTRIBUTING.md)。
 
 运行流程：
 
@@ -77,19 +80,27 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 
 ## GitHub Actions 自动构建
 
-[Android CI](.github/workflows/android-ci.yml) 对分支 push、目标为 main 的 PR 和手动触发运行：
-JUnit / Robolectric 单元测试、Android lint、Debug APK 构建。无需 NewsBlur 密码、API Key 或签名 secrets。
+[Android CI](.github/workflows/android-ci.yml) 对 main push、目标为 main 的 PR 和手动触发运行：
+Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、lint、构建和 APK 身份校验。
+普通 CI 不读取 NewsBlur 密码、API Key 或签名 secrets。
 使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
-只有 main 写缓存，其他分支及 PR 只读。旧的 Release 工作流已移除，没有自动签名或发布。
+只有 main 写缓存，PR 只读。Debug 校验调试签名；Preview / Stable 验证未签名构建，
+不把它们作为可安装版本交付。所有 action 使用固定完整 SHA。
 
 获批准推送并运行后，在仓库 Actions → Android CI → 对应运行的 Artifacts 下载：
 
 - `fluxa-debug-apk`：解压得到可安装的 `app-debug.apk`，仅全部验证通过时上传。
-- `fluxa-validation`：JUnit XML / HTML 与 lint 报告，测试失败时也尝试上传。
+- `fluxa-validation-debug/preview/stable`：各渠道 JUnit XML / HTML、lint 与 APK 元数据，
+  测试失败时也尝试上传。
 
 产物保留 14 天。首次将新工作流合入默认分支 main 后，Actions 页面才会显示
-“Run workflow”手动按钮；分支 push / PR 可先自动运行。详细说明见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
+“Run workflow”手动按钮；现有 PR 可先自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
 
 CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名相同，
 不能直接覆盖不同签名的已有安装；不要为安装 CI 产物卸载而丢失缓存。
-工作流只验证并保存构建产物，不合并 PR 或创建正式 Release。
+另有 [Prepare Android Release](.github/workflows/android-release.yml)，仅从 main 手动触发：
+先验证候选构建，再在受保护环境使用持久密钥签名，最后创建 tag 和 draft Release。
+缺少密钥或指纹不匹配会失败；不会把未签名 APK 发布到 Release。
+Preview 草稿带 prerelease 标记；公开发布需明确批准。Stable 默认禁用。
+首次预览目标为 v0.2.0-preview.1 / versionCode 3，密钥生成与上传需用户安全接管。
+配置和完整操作见 [发布指南](docs/releases.md)。
