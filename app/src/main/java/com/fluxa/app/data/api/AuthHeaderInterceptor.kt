@@ -12,9 +12,9 @@ class AuthHeaderInterceptor @Inject constructor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = tokenStore.getAccessToken().orEmpty()
-        val request = if (token.isNotBlank()) {
+        val request = if (token.isNotBlank() && chain.request().url.encodedPath.startsWith("/reader/api/")) {
             chain.request().newBuilder()
-                .addHeader("Authorization", "GoogleLogin auth=$token")
+                .header("Authorization", "Bearer $token")
                 .build()
         } else {
             chain.request()

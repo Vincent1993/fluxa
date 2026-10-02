@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +7,15 @@ plugins {
     id("com.google.devtools.ksp")
     kotlin("kapt")
 }
+
+val localConfig = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun configString(name: String): String {
+    val value = providers.environmentVariable(name).orNull ?: localConfig.getProperty(name, "")
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
     namespace = "com.fluxa.app"
@@ -14,17 +25,17 @@ android {
         applicationId = "com.fluxa.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "INOREADER_CLIENT_ID", '""')
-        buildConfigField("String", "INOREADER_CLIENT_SECRET", '""')
-        buildConfigField("String", "INOREADER_REDIRECT_URI", '"fluxa://oauth/callback"')
+        buildConfigField("String", "INOREADER_CLIENT_ID", configString("INOREADER_CLIENT_ID"))
+        buildConfigField("String", "INOREADER_CLIENT_SECRET", configString("INOREADER_CLIENT_SECRET"))
+        buildConfigField("String", "INOREADER_REDIRECT_URI", "\"fluxa://oauth/callback\"")
     }
 
     buildTypes {
@@ -57,6 +68,12 @@ android {
     }
 }
 
+android.testOptions.unitTests.isIncludeAndroidResources = true
+android.testOptions.unitTests.all {
+    // Keep Robolectric's downloaded SDK artifacts inside this checkout.
+    it.systemProperty("maven.repo.local", rootProject.file(".gradle/robolectric").absolutePath)
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
 
@@ -83,7 +100,7 @@ dependencies {
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
-    implementation("com.squareup.moshi:moshi:1.15.1")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
@@ -96,6 +113,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

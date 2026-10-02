@@ -9,5 +9,6 @@ data class Article(
     val publishedAt: Instant,
     val isRead: Boolean,
     val isStarred: Boolean,
-    val contentHtml: String
+    val contentHtml: String,
+    val source: String = ""
 )

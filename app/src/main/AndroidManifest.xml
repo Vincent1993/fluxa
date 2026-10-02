@@ -5,7 +5,9 @@
 
     <application
         android:name=".FluxaApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Fluxa"
         android:roundIcon="@android:drawable/sym_def_app_icon"
@@ -20,15 +22,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="oauth"
-                    android:path="/callback"
-                    android:scheme="fluxa" />
-            </intent-filter>
         </activity>
     </application>
 

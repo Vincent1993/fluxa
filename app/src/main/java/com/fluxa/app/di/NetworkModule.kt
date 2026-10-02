@@ -2,7 +2,11 @@ package com.fluxa.app.di
 
 import com.fluxa.app.data.api.AuthHeaderInterceptor
 import com.fluxa.app.data.api.InoreaderApi
+import com.fluxa.app.data.api.NewsBlurApi
+import com.fluxa.app.data.api.NewsBlurJsonAdapter
+import com.fluxa.app.data.api.NewsBlurSessionInterceptor
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,7 +22,16 @@ import javax.inject.Singleton
 object NetworkModule {
     @Provides
     @Singleton
-    fun provideMoshi(): Moshi = Moshi.Builder().build()
+    fun provideMoshi(): Moshi = Moshi.Builder().add(NewsBlurJsonAdapter()).addLast(KotlinJsonAdapterFactory()).build()
+
+    @Provides
+    @Singleton
+    fun provideNewsBlurApi(session: NewsBlurSessionInterceptor, moshi: Moshi): NewsBlurApi =
+        Retrofit.Builder().baseUrl("https://www.newsblur.com/")
+            .client(OkHttpClient.Builder().addInterceptor(session)
+                .followRedirects(false).followSslRedirects(false).build())
+            .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
+            .create(NewsBlurApi::class.java)
 
     @Provides
     @Singleton

@@ -25,9 +25,14 @@ data class StreamItem(
 )
 
 data class Origin(
-    @Json(name = "title") val title: String?
+    @Json(name = "title") val title: String?,
+    @Json(name = "streamId") val streamId: String? = null
 )
 
 data class Summary(
     @Json(name = "content") val content: String?
 )
+
+data class SubscriptionResponse(val subscriptions: List<SubscriptionDto> = emptyList())
+data class SubscriptionDto(val id: String, val title: String, val url: String = "")
+data class AddSubscriptionResponse(val numResults: Int)

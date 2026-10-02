@@ -11,6 +11,9 @@ interface ArticleDao {
     @Query("SELECT * FROM articles ORDER BY publishedAtEpochSeconds DESC")
     fun observeAll(): Flow<List<ArticleEntity>>
 
+    @Query("SELECT * FROM articles WHERE id = :id")
+    suspend fun getById(id: String): ArticleEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<ArticleEntity>)
 
