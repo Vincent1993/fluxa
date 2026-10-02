@@ -1,0 +1,120 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fluxa-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  policy:
+    name: Version and release policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check version and release safeguards
+        run: |
+          python3 scripts/release.py version
+          python3 scripts/test_release.py
+          python3 scripts/test_prepare_key.py
+          python3 scripts/release.py preflight --channel preview --tag "$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import release; v=release.read_version(open("version.properties").read()); print(release.expected(v, "preview")["tag"])')"
+      - name: Check new PR branch naming
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number > 6 && github.actor != 'dependabot[bot]' }}
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          [[ "$PR_BRANCH" =~ ^(feature|fix|chore|docs)/[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
+            echo "Use feature/, fix/, chore/ or docs/ with a lowercase kebab-case name."
+            exit 1
+          }
+
+  verify:
+    name: Tests, lint and APK (${{ matrix.channel }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: policy
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: debug
+            variant: Debug
+            directory: debug
+            apk: app-debug.apk
+          - channel: preview
+            variant: Preview
+            directory: preview
+            apk: app-preview-unsigned.apk
+          - channel: stable
+            variant: Release
+            directory: release
+            apk: app-release-unsigned.apk
+    env:
+      FLUXA_BUILD_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle cache and validate Wrapper
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          validate-wrappers: true
+      - name: Install required Android SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-35" "build-tools;34.0.0"
+      - name: Test, lint and build channel
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          ./gradlew ":app:test${VARIANT}UnitTest" ":app:lint$VARIANT" ":app:assemble$VARIANT" \
+            --continue --no-daemon --stacktrace
+      - name: Verify actual APK identity and signing boundary
+        env:
+          CHANNEL: ${{ matrix.channel }}
+          APK: app/build/outputs/apk/${{ matrix.directory }}/${{ matrix.apk }}
+        run: |
+          python3 scripts/release.py apk --channel "$CHANNEL" --apk "$APK" \
+            --output app/build/reports/channel-metadata.json
+      - name: Upload installable Debug APK
+        if: ${{ success() && matrix.channel == 'debug' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fluxa-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload channel validation reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fluxa-validation-${{ matrix.channel }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14

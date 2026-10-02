@@ -7,6 +7,9 @@ import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Path
+import com.fluxa.app.data.api.model.SubscriptionResponse
+import com.fluxa.app.data.api.model.AddSubscriptionResponse
 
 interface InoreaderApi {
     @FormUrlEncoded
@@ -20,8 +23,9 @@ interface InoreaderApi {
         @Field("redirect_uri") redirectUri: String
     ): TokenResponse
 
-    @GET("reader/api/0/stream/contents/user/-/state/com.google/reading-list")
+    @GET("reader/api/0/stream/contents/{streamId}")
     suspend fun getReadingStream(
+        @Path("streamId") streamId: String = "user/-/state/com.google/reading-list",
         @Query("n") count: Int,
         @Query("c") continuation: String? = null
     ): StreamContentsResponse
@@ -33,4 +37,11 @@ interface InoreaderApi {
         @Field("a") addTag: String? = null,
         @Field("r") removeTag: String? = null
     )
+
+    @GET("reader/api/0/subscription/list")
+    suspend fun getSubscriptions(): SubscriptionResponse
+
+    @FormUrlEncoded
+    @POST("reader/api/0/subscription/quickadd")
+    suspend fun addSubscription(@Field("quickadd") feedId: String): AddSubscriptionResponse
 }

@@ -1,209 +1,155 @@
 package com.fluxa.app.ui.feedlist
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Done
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.DismissDirection
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fluxa.app.domain.model.Article
-import com.fluxa.app.ui.components.UiState
-import java.time.Duration
-import java.time.Instant
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedListRoute(
     onOpenArticle: (String) -> Unit,
+    onLogin: () -> Unit,
     viewModel: FeedListViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-
-    Scaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("Fluxa") },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            AnimatedContent(uiState, label = "feed-list-state") { state ->
-                when (state) {
-                    UiState.Loading -> LoadingState()
-                    UiState.Empty -> MessageState("暂无文章")
-                    is UiState.Error -> MessageState(state.message)
-                    is UiState.Success -> FeedListScreen(
-                        articles = state.data,
-                        onArticleClick = {
-                            viewModel.markRead(it)
-                            onOpenArticle(it)
-                        },
-                        onMarkRead = viewModel::markRead,
-                        onToggleStar = viewModel::toggleStar,
-                        onReachEnd = viewModel::loadMore
-                    )
-                }
-            }
-        }
-    }
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    FeedListScreen(state, onOpenArticle, onLogin, viewModel::refresh, viewModel::loadMore,
+        viewModel::setQuery, viewModel::setFilter, viewModel::selectSource,
+        viewModel::markRead, viewModel::toggleStar, viewModel::addSubscription,
+        viewModel::retryPending)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FeedListScreen(
-    articles: List<Article>,
-    onArticleClick: (String) -> Unit,
+fun FeedListScreen(
+    state: FeedListState,
+    onOpenArticle: (String) -> Unit,
+    onLogin: () -> Unit,
+    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onQuery: (String) -> Unit,
+    onFilter: (ArticleFilter) -> Unit,
+    onSource: (String?) -> Unit,
     onMarkRead: (String) -> Unit,
     onToggleStar: (String) -> Unit,
-    onReachEnd: () -> Unit
+    onSubscribe: (String) -> Unit,
+    onRetryPending: () -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        itemsIndexed(items = articles, key = { _, item -> item.id }) { index, article ->
-            if (index >= articles.lastIndex - 2) onReachEnd()
-
-            val dismissState = androidx.compose.material3.rememberSwipeToDismissBoxState(
-                positionalThreshold = { total -> total * 0.35f },
-                confirmValueChange = { value ->
-                    when (value) {
-                        SwipeToDismissBoxValue.StartToEnd -> onToggleStar(article.id)
-                        SwipeToDismissBoxValue.EndToStart -> onMarkRead(article.id)
-                        SwipeToDismissBoxValue.Settled -> Unit
-                    }
-                    true
+    var showSources by rememberSaveable { mutableStateOf(false) }
+    var showAdd by rememberSaveable { mutableStateOf(false) }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("Fluxa") }, actions = {
+            IconButton(onClick = { showSources = true }) { Icon(Icons.AutoMirrored.Outlined.List, "选择订阅") }
+            IconButton(onClick = { showAdd = true }) { Icon(Icons.Outlined.Add, "添加订阅") }
+            IconButton(onClick = onRefresh, enabled = !state.busy) { Icon(Icons.Outlined.Refresh, "刷新") }
+            IconButton(onClick = onLogin) { Icon(Icons.Outlined.AccountCircle, "登录 NewsBlur") }
+        })
+    }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            Text("内容由 NewsBlur 同步", style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            OutlinedTextField(value = state.query, onValueChange = onQuery,
+                label = { Text("搜索已缓存文章") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ArticleFilter.entries.forEach { filter ->
+                    FilterChip(state.filter == filter, { onFilter(filter) }, { Text(filter.label) })
                 }
-            )
-
-            SwipeToDismissBox(
-                state = dismissState,
-                backgroundContent = {
-                    val direction = dismissState.dismissDirection
-                    val isStarAction = direction == DismissDirection.StartToEnd
-                    val color = if (isStarAction) Color(0xFF204C30) else Color(0xFF2D3A55)
-                    val alignment = if (isStarAction) Alignment.CenterStart else Alignment.CenterEnd
-                    val icon = if (isStarAction) Icons.Outlined.Star else Icons.Outlined.Done
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(color)
-                            .padding(horizontal = 20.dp),
-                        contentAlignment = alignment
-                    ) {
-                        Icon(icon, contentDescription = null, tint = Color.White)
-                    }
+                if (state.source != null) {
+                    InputChip(true, { showSources = true }, {
+                        Text(state.subscriptions.firstOrNull { it.id == state.source }?.title ?: "当前订阅")
+                    })
                 }
-            ) {
-                ArticleCard(article = article, onClick = { onArticleClick(article.id) })
             }
-        }
-    }
-}
-
-@Composable
-private fun ArticleCard(article: Article, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = article.title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${article.feedName} · ${relativeTime(article.publishedAt)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-            if (!article.isRead || article.isStarred) {
-                Text(
-                    text = buildString {
-                        if (!article.isRead) append("未读")
-                        if (article.isStarred) {
-                            if (isNotEmpty()) append(" · ")
-                            append("已收藏")
+            state.message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodySmall) }
+            if (state.pendingCount > 0) {
+                TextButton(onClick = onRetryPending, enabled = !state.busy) {
+                    Text("${state.pendingCount} 项操作待同步 · 重试")
+                }
+            }
+            PullToRefreshBox(state.busy, onRefresh, Modifier.weight(1f)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (state.articles.isEmpty()) {
+                        item {
+                            Text(if (state.query.isNotBlank() || state.filter != ArticleFilter.All)
+                                "没有匹配的缓存文章" else "暂无缓存文章。登录后添加订阅，再刷新。",
+                                style = MaterialTheme.typography.bodyLarge)
                         }
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                    }
+                    items(state.articles, key = { it.id }) { article ->
+                        ArticleCard(article, { onOpenArticle(article.id) },
+                            { onMarkRead(article.id) }, { onToggleStar(article.id) })
+                    }
+                    item {
+                        TextButton(onClick = onLoadMore, enabled = !state.busy) {
+                            Text(if (state.busy) "同步中…" else "加载更多")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showSources) {
+        AlertDialog(onDismissRequest = { showSources = false },
+            title = { Text("订阅") }, text = {
+                LazyColumn {
+                    item { TextButton(onClick = { onSource(null); showSources = false },
+                        enabled = !state.busy) { Text("全部订阅") } }
+                    items(state.subscriptions, key = { it.id }) { subscription ->
+                        TextButton(onClick = { onSource(subscription.id); showSources = false },
+                            enabled = !state.busy) { Text(subscription.title) }
+                    }
+                    if (state.subscriptions.isEmpty()) item { Text("登录并刷新后会显示订阅") }
+                }
+            }, confirmButton = { TextButton(onClick = { showSources = false }) { Text("关闭") } })
+    }
+    if (showAdd) AddSubscriptionDialog(state.busy, { showAdd = false }) {
+        onSubscribe(it); showAdd = false
+    }
+}
+
+@Composable
+private fun ArticleCard(article: Article, onOpen: () -> Unit, onRead: () -> Unit, onStar: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Column(Modifier.padding(16.dp)) {
+            Text(article.title, style = MaterialTheme.typography.titleMedium,
+                maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text("${article.feedName} · ${article.publishedAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            Row {
+                TextButton(onClick = onRead, enabled = !article.isRead) {
+                    Text(if (article.isRead) "已读" else "标记已读")
+                }
+                TextButton(onClick = onStar) { Text(if (article.isStarred) "取消收藏" else "收藏文章") }
             }
         }
     }
 }
 
 @Composable
-private fun LoadingState() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun MessageState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = message)
-    }
-}
-
-private fun relativeTime(time: Instant): String {
-    val duration = Duration.between(time, Instant.now())
-    return when {
-        duration.toMinutes() < 1 -> "刚刚"
-        duration.toHours() < 1 -> "${duration.toMinutes()} 分钟前"
-        duration.toDays() < 1 -> "${duration.toHours()} 小时前"
-        else -> "${duration.toDays()} 天前"
-    }
+private fun AddSubscriptionDialog(busy: Boolean, onClose: () -> Unit, onAdd: (String) -> Unit) {
+    var url by rememberSaveable { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onClose, title = { Text("添加 RSS 订阅") }, text = {
+        OutlinedTextField(url, { url = it }, label = { Text("HTTP / HTTPS RSS 地址") }, singleLine = true)
+    }, confirmButton = {
+        TextButton(onClick = { onAdd(url) }, enabled = url.isNotBlank() && !busy) { Text("订阅") }
+    }, dismissButton = { TextButton(onClick = onClose) { Text("取消") } })
 }

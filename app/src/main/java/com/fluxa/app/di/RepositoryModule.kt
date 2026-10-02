@@ -2,8 +2,8 @@ package com.fluxa.app.di
 
 import com.fluxa.app.data.repository.ArticleRepository
 import com.fluxa.app.data.repository.AuthRepository
-import com.fluxa.app.data.repository.InoreaderArticleRepository
-import com.fluxa.app.data.repository.InoreaderAuthRepository
+import com.fluxa.app.data.repository.NewsBlurArticleRepository
+import com.fluxa.app.data.repository.NewsBlurAuthRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -15,9 +15,9 @@ import javax.inject.Singleton
 abstract class RepositoryModule {
     @Binds
     @Singleton
-    abstract fun bindArticleRepository(impl: InoreaderArticleRepository): ArticleRepository
+    abstract fun bindArticleRepository(impl: NewsBlurArticleRepository): ArticleRepository
 
     @Binds
     @Singleton
-    abstract fun bindAuthRepository(impl: InoreaderAuthRepository): AuthRepository
+    abstract fun bindAuthRepository(impl: NewsBlurAuthRepository): AuthRepository
 }

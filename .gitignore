@@ -6,3 +6,9 @@
 **/build/
 *.iml
 .cxx/
+.signing/
+*.jks
+*.keystore
+*.p12
+key.properties
+__pycache__/

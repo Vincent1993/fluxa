@@ -5,5 +5,5 @@ object Routes {
     const val FeedList = "feedList"
     const val Article = "article/{id}"
 
-    fun article(id: String): String = "article/$id"
+    fun article(id: String): String = "article/${android.net.Uri.encode(id)}"
 }

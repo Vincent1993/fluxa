@@ -6,12 +6,15 @@ import com.fluxa.app.data.local.SecureTokenStore
 import com.fluxa.app.data.model.AuthToken
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class InoreaderAuthRepository @Inject constructor(
     private val api: InoreaderApi,
     private val tokenStore: SecureTokenStore
 ) : AuthRepository {
+    private val refreshLock = Mutex()
     override suspend fun exchangeCode(code: String) {
         val response = api.exchangeToken(
             grantType = "authorization_code",
@@ -29,13 +32,13 @@ class InoreaderAuthRepository @Inject constructor(
         )
     }
 
-    override suspend fun refreshIfNeeded(): String? {
+    override suspend fun refreshIfNeeded(): String? = refreshLock.withLock {
         val token = tokenStore.getAccessToken()
-        if (token.isNullOrBlank()) return null
-        if (!tokenStore.isAccessTokenExpired()) return token
+        if (token.isNullOrBlank()) return@withLock null
+        if (!tokenStore.isAccessTokenExpired()) return@withLock token
 
         val refreshToken = tokenStore.getRefreshToken().orEmpty()
-        if (refreshToken.isBlank()) return null
+        if (refreshToken.isBlank()) return@withLock null
 
         val response = api.exchangeToken(
             grantType = "refresh_token",
@@ -51,7 +54,7 @@ class InoreaderAuthRepository @Inject constructor(
                 expiresInSeconds = response.expiresIn
             )
         )
-        return response.accessToken
+        response.accessToken
     }
 
     override fun hasSession(): Boolean = tokenStore.isLoggedIn()
