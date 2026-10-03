@@ -70,13 +70,14 @@ jobs:
           validate-wrappers: true
       - run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platforms;android-35" "build-tools;34.0.0"
+            "platforms;android-37.0" "build-tools;36.0.0"
       - name: Test exact unsigned candidate without secrets
         env:
           VARIANT: ${{ steps.version.outputs.variant }}
           DIRECTORY: ${{ steps.version.outputs.build_type }}
         run: |
           python3 scripts/test_release.py
+          python3 scripts/test_native_alignment.py
           ./gradlew ":app:test${VARIANT}UnitTest" ":app:lint$VARIANT" ":app:assemble$VARIANT" \
             --continue --no-daemon --stacktrace
           cp "app/build/outputs/apk/$DIRECTORY/app-$DIRECTORY-unsigned.apk" payload/unsigned.apk
@@ -120,7 +121,7 @@ jobs:
           name: release-candidate-unsigned
           path: candidate/
       - run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;34.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;36.0.0"
       - name: Check candidate before accessing signing credentials
         run: |
           python3 scripts/release.py apk --channel "$RELEASE_CHANNEL" --apk candidate/unsigned.apk
@@ -152,7 +153,7 @@ jobs:
           PY
           mkdir dist
           APK_NAME="fluxa-$RELEASE_TAG-$RELEASE_CHANNEL.apk"
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
             --ks "$RUNNER_TEMP/fluxa-signing.p12" --ks-key-alias "$FLUXA_KEY_ALIAS" \
             --ks-pass env:FLUXA_KEYSTORE_PASSWORD --key-pass env:FLUXA_KEY_PASSWORD \
             --out "dist/$APK_NAME" candidate/unsigned.apk

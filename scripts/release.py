@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from native_alignment import inspect_apk
 
 ROOT = Path(__file__).resolve().parents[1]
 CHANNELS = {"debug": ("debug", "com.fluxa.app.debug", "Fluxa Debug"),
@@ -112,7 +113,7 @@ def manifest_fields(tree):
 
 
 def verify_apk(apk, metadata, signed, certificate, sdk):
-    tools = Path(sdk) / "build-tools" / "34.0.0"
+    tools = Path(sdk) / "build-tools" / "36.0.0"
     fields = manifest_fields(command(str(tools / "aapt2"), "dump", "xmltree", "--file",
                                      "AndroidManifest.xml", str(apk)).stdout)
     for key in ("application_id", "version_name", "version_code", "label"):
@@ -141,7 +142,10 @@ def verify_apk(apk, metadata, signed, certificate, sdk):
         raise ValueError("Secret-free CI must produce an unsigned distribution build")
     elif metadata["channel"] == "debug" and verification.returncode != 0:
         raise ValueError("Debug APK signature verification failed")
+    native_libraries = inspect_apk(apk)
+    command(str(tools / "zipalign"), "-c", "-P", "16", "4", str(apk))
     return {**metadata, **fields, "signed": signed or metadata["channel"] == "debug",
+            "native_64bit_libraries": native_libraries, "zip_alignment_16kb": True,
             "signing_certificate_sha256": certificate_sha,
             "apk_sha256": hashlib.sha256(apk.read_bytes()).hexdigest(), "apk_bytes": apk.stat().st_size}
 

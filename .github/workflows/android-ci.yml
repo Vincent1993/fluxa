@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 scripts/release.py version
           python3 scripts/test_release.py
+          python3 scripts/test_native_alignment.py
           python3 scripts/test_prepare_key.py
           python3 scripts/release.py preflight --channel preview --tag "$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import release; v=release.read_version(open("version.properties").read()); print(release.expected(v, "preview")["tag"])')"
       - name: Check new PR branch naming
@@ -85,7 +86,7 @@ jobs:
       - name: Install required Android SDK components
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platforms;android-35" "build-tools;34.0.0"
+            "platforms;android-37.0" "build-tools;36.0.0"
       - name: Test, lint and build channel
         env:
           VARIANT: ${{ matrix.variant }}
