@@ -27,7 +27,7 @@ fun LoginRoute(onOpenCache: () -> Unit, onLoginSuccess: () -> Unit,
     LaunchedEffect(state) { if (state is UiState.Success) onLoginSuccess() }
     val context = LocalContext.current
     LoginScreen(state, viewModel::signIn, onOpenCache) {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.newsblur.com/")))
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.newsblur.com/"))) }
     }
 }
 
@@ -37,7 +37,8 @@ fun LoginScreen(state: UiState<Unit>, onSignIn: (String, String) -> Unit,
     var username by rememberSaveable { mutableStateOf("") }
     // Do not persist passwords in SavedState or on disk.
     var password by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()
+        .verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Fluxa", style = MaterialTheme.typography.displaySmall)
         Text("安静阅读，离线也能收藏", style = MaterialTheme.typography.bodyLarge,

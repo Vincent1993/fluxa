@@ -5,12 +5,15 @@ import android.view.ViewOutlineProvider
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -36,8 +39,9 @@ fun ArticleRoute(onBack: () -> Unit, viewModel: ArticleViewModel = hiltViewModel
             }
         })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(16, 18, 20, 24).forEach { size ->
                     FilterChip(fontSize == size, { viewModel.setFontSize(size) }, { Text("${size}号") })
                 }
@@ -49,6 +53,7 @@ fun ArticleRoute(onBack: () -> Unit, viewModel: ArticleViewModel = hiltViewModel
                 is UiState.Error -> Text(articleState.message, Modifier.padding(16.dp))
                 is UiState.Success -> {
                     Text(articleState.data.title, style = MaterialTheme.typography.titleLarge,
+                        maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                     ArticleContent(articleState.data.contentHtml, fontSize, Modifier.weight(1f))
                 }

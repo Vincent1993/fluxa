@@ -47,7 +47,7 @@ android {
     defaultConfig {
         applicationId = "com.fluxa.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 37
         versionCode = appVersionCode
         versionName = baseVersion
         manifestPlaceholders["appLabel"] = "Fluxa"

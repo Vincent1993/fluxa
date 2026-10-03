@@ -22,7 +22,7 @@
 
 ## 构建与安装
 
-需要 JDK 17、Android SDK platform 35 / build-tools 34.0.0。Gradle 8.9 Wrapper 已附带校验哈希。
+需要 JDK 17、Android SDK platform 37.0 / build-tools 36.0.0。Gradle 9.4.1 Wrapper 已附带校验哈希。
 在 git 忽略的 `local.properties` 设置 SDK 路径：
 
 ```properties
@@ -66,6 +66,8 @@ python3 scripts/verify-migration-sql.py
 2026-10-02 的后台刷新版本本地验证已通过：三渠道 APK 各自构建、各 34/34 单元测试、
 9/9 API 35 设备测试；各渠道 lint 为 0 错误 / 19 警告。
 详见 [后台刷新验证](docs/background-sync-validation-2026-10-02.md)。真实 NewsBlur 用户账号尚未联调。
+Android 17 升级的工具链、三渠道结果、API 26 覆盖升级及 API 37／16 KB 设备 CI
+见 [Android 17 验证记录](docs/android-seventeen-validation-2026-10-03.md)。
 包含 Room/Robolectric、MockWebServer 协议与离线重放、ViewModel、
 AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离线重启验证。
 测试夹具不代替真实 NewsBlur 用户账号验收。
@@ -85,7 +87,7 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 [Android CI](.github/workflows/android-ci.yml) 对 main push、目标为 main 的 PR 和手动触发运行：
 Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、lint、构建和 APK 身份校验。
 普通 CI 不读取 NewsBlur 密码、API Key 或签名 secrets。
-使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
+使用 JDK 17、Gradle 9.4.1 Wrapper、SDK 37.0 / build-tools 36.0.0；Gradle 依赖和发行包使用基础缓存，
 只有 main 写缓存，PR 只读。Debug 校验调试签名；Preview / Stable 验证未签名构建，
 不把它们作为可安装版本交付。所有 action 使用固定完整 SHA。
 
@@ -104,5 +106,5 @@ CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名�
 先验证候选构建，再在受保护环境使用持久密钥签名，最后创建 tag 和 draft Release。
 缺少密钥或指纹不匹配会失败；不会把未签名 APK 发布到 Release。
 Preview 草稿带 prerelease 标记；公开发布需明确批准。Stable 默认禁用。
-首次预览目标为 v0.2.0-preview.1 / versionCode 3，密钥生成与上传需用户安全接管。
+当前预览候选为 v0.3.0-preview.1 / versionCode 4，密钥生成与上传需用户安全接管。
 配置和完整操作见 [发布指南](docs/releases.md)。

@@ -1,0 +1,113 @@
+name: Android device compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fluxa-device-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  device:
+    name: Upgrade and device tests (API ${{ matrix.api }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: '26'
+            tag: google_apis
+            page_size: '4096'
+          - api: '37.0'
+            tag: google_apis_ps16k
+            page_size: '16384'
+    env:
+      FLUXA_BUILD_COMMIT: ${{ github.sha }}
+      ANDROID_SERIAL: emulator-5554
+      TEST_API: ${{ matrix.api }}
+      TEST_TAG: ${{ matrix.tag }}
+      EXPECTED_PAGE_SIZE: ${{ matrix.page_size }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+      - name: Install baseline, candidate and device SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-35" "build-tools;34.0.0" \
+            "platforms;android-37.0" "build-tools;36.0.0" \
+            "system-images;android-$TEST_API;$TEST_TAG;x86_64"
+      - name: Build old and new APKs with the same ephemeral test certificate
+        run: |
+          git worktree add --detach ../fluxa-upgrade-baseline b61c6d97995dd79f3c2ff549da28a6f802471d77
+          cp app/src/androidTest/java/com/fluxa/app/UpgradePreservationTest.kt \
+            ../fluxa-upgrade-baseline/app/src/androidTest/java/com/fluxa/app/UpgradePreservationTest.kt
+          (cd ../fluxa-upgrade-baseline && FLUXA_BUILD_COMMIT=b61c6d97995dd79f3c2ff549da28a6f802471d77 \
+            ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace)
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - name: Boot a fresh isolated emulator and verify its actual API and page size
+        run: |
+          test -e /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --name fluxa-device-ci --package "system-images;android-$TEST_API;$TEST_TAG;x86_64" --device pixel_2
+          mkdir -p device-reports
+          "$ANDROID_HOME/emulator/emulator" -avd fluxa-device-ci -port 5554 \
+            -no-window -no-audio -no-snapshot -gpu swiftshader -memory 2048 \
+            > device-reports/emulator.log 2>&1 &
+          for attempt in $(seq 1 120); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then break; fi
+            sleep 3
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+          actual_api=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+          actual_page=$(adb shell getconf PAGESIZE | tr -d '\r')
+          test "$actual_api" = "${TEST_API%%.*}"
+          test "$actual_page" = "$EXPECTED_PAGE_SIZE"
+          printf 'API=%s\nPAGE_SIZE=%s\n' "$actual_api" "$actual_page" > device-reports/device.txt
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell input keyevent 82
+      - name: Replace the baseline APK without uninstalling and verify retained data
+        run: |
+          bash scripts/device-upgrade-test.sh \
+            ../fluxa-upgrade-baseline/app/build/outputs/apk/debug/app-debug.apk \
+            ../fluxa-upgrade-baseline/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            app/build/outputs/apk/debug/app-debug.apk \
+            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk device-reports
+      - name: Preserve device diagnostics
+        if: ${{ always() }}
+        run: |
+          mkdir -p device-reports
+          adb logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
+          adb emu kill || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() }}
+        with:
+          name: fluxa-device-api-${{ matrix.api }}
+          path: device-reports/
+          if-no-files-found: error
+          retention-days: 14

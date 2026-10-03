@@ -121,7 +121,7 @@ def verify_apk(apk, metadata, signed, certificate, sdk):
             raise ValueError("APK metadata differs: " + key)
     if fields["debuggable"] != (metadata["channel"] == "debug"):
         raise ValueError("Wrong APK debuggable flag")
-    if fields["min_sdk"] != 26 or fields["target_sdk"] != 35:
+    if fields["min_sdk"] != 26 or fields["target_sdk"] != 37:
         raise ValueError("Unexpected APK API levels")
     verification = command(str(tools / "apksigner"), "verify", "--verbose", "--print-certs",
                            "--min-sdk-version", "26", str(apk), check=False)

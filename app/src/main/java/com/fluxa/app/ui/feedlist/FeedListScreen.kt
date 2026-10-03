@@ -72,7 +72,7 @@ fun FeedListScreen(
             IconButton(onClick = { showSettings = true }) { Icon(Icons.Outlined.Settings, "账户与同步设置") }
         })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             Text("内容由 NewsBlur 同步", style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             OutlinedTextField(value = state.query, onValueChange = onQuery,
