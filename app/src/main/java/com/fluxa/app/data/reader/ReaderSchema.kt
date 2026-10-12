@@ -24,28 +24,28 @@ object ReaderSchema {
             while (c.moveToNext()) {
                 val articleId = prefix + c.string("id")
                 if (prefix.isNotEmpty()) {
-                    val present = db.query("SELECT articleId FROM reader_metadata WHERE articleId=?", arrayOf(articleId)).use { it.moveToFirst() }
+                    val present = db.query("SELECT articleId FROM reader_metadata WHERE articleId=?", arrayOf<Any?>(articleId)).use { it.moveToFirst() }
                     if (present) continue
                     imported += articleId
                 }
                 val body = c.string("contentHtml")
                 val plain = ReaderHtml.text(body)
-                db.execSQL("INSERT OR IGNORE INTO reader_metadata VALUES (?,?,?,?,?,?,?,?,?)", arrayOf(
+                db.execSQL("INSERT OR IGNORE INTO reader_metadata VALUES (?,?,?,?,?,?,?,?,?)", arrayOf<Any?>(
                     prefix + c.string("id"), c.string("url"), c.string("author"), c.string("excerpt", plain.take(240)),
                     c.long("wordCount", ReaderHtml.wordCount(plain).toLong()), c.number("readingProgress"),
                     c.nullableLong("archivedAtEpochSeconds"), c.nullableLong("savedAtEpochSeconds"), c.nullableLong("lastOpenedAtEpochSeconds")))
             }
         }
         if (exists("highlights")) query("SELECT * FROM highlights").use { c ->
-            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf(
+            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf<Any?>(
                 prefix + "legacy/highlight/" + c.string("id"), prefix + c.string("articleId"), "highlight",
                 c.string("quote"), c.string("note"), c.string("color", "#f1d28a"), c.long("createdAtEpochSeconds"), c.long("updatedAtEpochSeconds")))
         }
         if (exists("tags")) query("SELECT * FROM tags").use { c ->
-            while (c.moveToNext()) db.execSQL("INSERT OR IGNORE INTO reader_tags VALUES (?,?,?,?)", arrayOf(prefix + c.string("id"), c.string("name"), c.long("createdAtEpochSeconds"), c.long("updatedAtEpochSeconds")))
+            while (c.moveToNext()) db.execSQL("INSERT OR IGNORE INTO reader_tags VALUES (?,?,?,?)", arrayOf<Any?>(prefix + c.string("id"), c.string("name"), c.long("createdAtEpochSeconds"), c.long("updatedAtEpochSeconds")))
         }
         if (exists("article_tag_cross_ref")) query("SELECT * FROM article_tag_cross_ref").use { c ->
-            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_article_tags VALUES (?,?)", arrayOf(prefix + c.string("articleId"), prefix + c.string("tagId")))
+            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_article_tags VALUES (?,?)", arrayOf<Any?>(prefix + c.string("articleId"), prefix + c.string("tagId")))
         }
         if (exists("pending_actions")) query("SELECT * FROM pending_actions").use { c ->
             while (c.moveToNext()) {
@@ -54,11 +54,11 @@ object ReaderSchema {
                 val kind = c.string("actionType")
                 val time = c.long("createdAtEpochMillis") / 1000
                 when (kind) {
-                    "AddNote", "AddHighlight" -> db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf(
+                    "AddNote", "AddHighlight" -> db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf<Any?>(
                         prefix + "legacy/pending/" + c.string("id"), id, if (kind == "AddNote") "note" else "highlight",
                         if (kind == "AddHighlight") c.string("payload") else "", if (kind == "AddNote") c.string("payload") else "", "#f1d28a", time, time))
-                    "Archive" -> db.execSQL("UPDATE reader_metadata SET archivedAtEpochSeconds=? WHERE articleId=?", arrayOf(time, id))
-                    "SaveForLater" -> db.execSQL("UPDATE reader_metadata SET savedAtEpochSeconds=? WHERE articleId=?", arrayOf(time, id))
+                    "Archive" -> db.execSQL("UPDATE reader_metadata SET archivedAtEpochSeconds=? WHERE articleId=?", arrayOf<Any?>(time, id))
+                    "SaveForLater" -> db.execSQL("UPDATE reader_metadata SET savedAtEpochSeconds=? WHERE articleId=?", arrayOf<Any?>(time, id))
                 }
             }
         }
