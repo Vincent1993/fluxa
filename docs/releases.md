@@ -24,11 +24,17 @@ Branch naming applies to new human PRs; historical PR #1–6 and Dependabot are 
 
 ## Owner approval and secure signing setup
 
-Before first publication, approve the exact target: PR #7 into main; initial Preview tag
-v0.3.0-preview.1 / code 4; public prerelease in Vincent1993/fluxa.
+The current candidate is Preview v0.3.0-preview.1 / code 4 from the integrated main.
+The release mechanism is authorized; creating new persistent keys or uploading credentials still
+requires owner-controlled secure setup. No successful persistent-signing run or release assets
+have been verified. Public Releases currently has no versions. Connector access to environment
+configuration is unavailable, so secret presence is unconfirmed rather than assumed missing.
+
 The workflow creates a draft first. Public publication is a separate explicit action.
-Stable publication is disabled until the owner separately configures its signing and sets
-the repository variable ENABLE_STABLE_RELEASE=true; no Stable is planned in the first run.
+Stable remains gated by ENABLE_STABLE_RELEASE=true plus an independently pinned Stable certificate,
+an exact Stable changelog section and acceptance of the installed signed candidate. A later published
+channel must increase VERSION_CODE beyond earlier published tags. Do not enable Stable merely to
+bypass Preview setup or reuse a temporary Debug certificate.
 
 Approve creation of the preview environment, restricted to main. Optional environment review
 must allow the owner to approve their own run in a one-person repository.
@@ -41,14 +47,6 @@ No release key has been created merely by adding these scripts.
 After approving generation, use JDK 17 and run interactively:
 
 ```sh
-bash scripts/prepare-preview-key.sh
-```
-
-On this Mac, first enter the checkout and activate the existing isolated JDK:
-
-```sh
-cd /Users/admin/Documents/Codex/2026-10-02/task/fluxa
-source ../toolchain/env.sh
 bash scripts/prepare-preview-key.sh
 ```
 
@@ -87,7 +85,7 @@ The signing certificate fingerprint is public metadata; private key bytes and pa
 
 ## Prepare a release
 
-After the approved PR is merged, both workflow_dispatch entries become available from main.
+After the integration PR is merged, both workflow_dispatch entries become available from main.
 Choose Actions → Prepare Android Release → Run workflow → main, channel preview,
 tag v0.3.0-preview.1. Choosing another branch fails before the signing job.
 The selected main commit is pinned throughout the run; moving main does not change the candidate.
@@ -103,7 +101,7 @@ The selected main commit is pinned throughout the run; moving main does not chan
    Preview is marked prerelease and not latest. APK, SHA256SUMS and release-metadata.json are attached.
    No workflow step publishes the draft.
 
-Only a newly authorized dispatch creates tags/drafts. PRs, branch pushes and Dependabot cannot publish.
+Only an explicit release dispatch creates tags/drafts. PRs, branch pushes and Dependabot cannot publish.
 Actions are pinned to full commit SHAs. Signing jobs do not write Gradle caches.
 The workflow never uploads keystores or unsigned APKs as public Release assets.
 
@@ -124,3 +122,19 @@ Retain release-metadata.json with commit, package, code, checksum and signing fi
 Existing releases are never overwritten automatically. If upload fails after tag creation,
 preserve the tag; inspect the partial draft and missing assets, verify the same commit/checksum,
 then explicitly authorize recovery. Do not move a published tag or replace an APK under it.
+
+## Current release readiness
+
+The manual workflow in `.github/workflows/android-release.yml` is independent of PR/main validation.
+It does not run for each development commit and never publishes a draft automatically. It prepares
+APK, SHA256SUMS, release notes and source/certificate metadata only after persistent signing passes.
+
+Initial Preview plan: after main CI passes and the owner confirms the Preview fingerprint and four
+protected-environment secrets, dispatch from main with preview / v0.3.0-preview.1. Verify the downloaded
+signed APK and real-account behavior, then explicitly approve publication of that draft. Stable follows
+its own key, changelog, increasing version code and installation/upgrade acceptance.
+
+No signing key was generated or read, no secrets uploaded, and no tag or Release created during branch
+integration. The connector returned HTTP 400 for environment metadata because its fetch allowlist does
+not expose that endpoint. The owner can confirm setup in GitHub Settings → Environments without
+sharing any private values in chat.

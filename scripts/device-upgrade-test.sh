@@ -56,6 +56,10 @@ for name in validation-login.png validation-reader.png validation-cache.png; do
     # Screenshots are optional diagnostics; JUnit and upgrade assertions above are mandatory.
     if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/$name"; then
         "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/$name" > "$reports/$name"
+        # Only fixture screenshots from this isolated emulator; enables exact README evidence.
+        if [[ "$name" = validation-reader.png ]]; then
+            printf 'FLUXA_READER_SCREENSHOT_BASE64=%s\n' "$(base64 -w 0 "$reports/$name")"
+        fi
     else
         printf '%s: no diagnostic frame was produced\n' "$name" >> "$reports/screenshots-unavailable.txt"
     fi

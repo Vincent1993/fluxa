@@ -83,6 +83,10 @@ jobs:
           cp "app/build/outputs/apk/$DIRECTORY/app-$DIRECTORY-unsigned.apk" payload/unsigned.apk
           python3 scripts/release.py apk --channel "$RELEASE_CHANNEL" --apk payload/unsigned.apk \
             --output payload/unsigned-metadata.json
+      - name: Require actual passing unit test results
+        env:
+          VARIANT: ${{ steps.version.outputs.variant }}
+        run: python3 scripts/ci-test-summary.py "app/build/test-results/test${VARIANT}UnitTest" --output app/build/reports/release-test-summary.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-candidate-unsigned
