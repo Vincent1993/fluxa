@@ -5,7 +5,7 @@
 使用逐订阅文章接口在本地合并列表，避开免费账号的 River of News 翻页限制。
 账号的订阅启用与历史保留范围仍由 NewsBlur 决定，参见 [官方 API](https://www.newsblur.com/api)。
 
-## 第一版能力
+## 当前仓库已有能力
 
 - NewsBlur 用户名 / 密码登录；密码不保存，会话 Cookie 保存在 Android 加密存储中。
 - 获取启用订阅、按 HTTP / HTTPS RSS 地址添加订阅、按订阅阅读。
@@ -22,7 +22,11 @@
 
 ## 构建与安装
 
-需要 JDK 17、Android SDK platform 35 / build-tools 34.0.0。Gradle 8.9 Wrapper 已附带校验哈希。
+当前 main 源码需要完整 JDK 17（含 javac）、Android SDK platform 35 / build-tools 34.0.0，
+设备安装另需 platform-tools。Gradle 8.9 Wrapper 已附带校验哈希，始终使用 `./gradlew`，
+不使用机器预装的系统 Gradle。AGP 8.5.2 / Kotlin 1.9.24 与 Wrapper 配套，不能单独升级 Wrapper。
+首次构建需联网下载官方发行包与 Maven 依赖，并按官方提示处理适用的 SDK 许可。
+API 36 设备测试是运行时兼容检查，不表示 compileSdk / targetSdk 已升级到 36。
 在 git 忽略的 `local.properties` 设置 SDK 路径：
 
 ```properties
@@ -30,7 +34,9 @@ sdk.dir=/absolute/path/to/android-sdk
 ```
 
 ```sh
-export JAVA_HOME=/absolute/path/to/jdk17/Contents/Home
+# Linux：JDK 根目录；macOS：通常是 JDK 包内的 Contents/Home
+export JAVA_HOME=/absolute/path/to/jdk17
+export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.fluxa.app.debug/com.fluxa.app.MainActivity
@@ -38,7 +44,7 @@ adb shell am start -n com.fluxa.app.debug/com.fluxa.app.MainActivity
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-本次 Mac 的隔离工具链位于仓库同级的 `../toolchain`，可先 `source ../toolchain/env.sh`。
+此前 Mac 的隔离工具链位于仓库同级的 `../toolchain`，可先 `source ../toolchain/env.sh`。
 Debug 的包名为 com.fluxa.app.debug；Preview 为 com.fluxa.app.preview；
 Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道升级需要固定签名。
 版本由 version.properties 管理；新发布的 versionCode 必须递增。
@@ -80,23 +86,51 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 - 会话过期需重新登录，保留离线缓存和待同步操作。
 - 真实 NewsBlur 账号的登录、添加订阅与最终服务端状态仍需用户安装后验收。
 
+## 源码与验证范围
+
+README 的功能与工具链描述以本仓库已提交源码为准。Mac 上 `feature/github-library`
+尚未同步的功能不包含在当前远端验证中；这里的历史通过记录也不验证那些改动。
+同步最新源码（含必要未跟踪文件，排除凭据和个人数据）后，需要重新核对依赖与构建配置，
+再更新 CI 工具版本并重新执行全部检查。SDK 37 / Gradle 9.4.1 等新版配置须以该源码为依据，
+本次 CI 改造不预先升级它们。
+
 ## GitHub Actions 自动构建
 
 [Android CI](.github/workflows/android-ci.yml) 对 main push、目标为 main 的 PR 和手动触发运行：
 Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、lint、构建和 APK 身份校验。
-普通 CI 不读取 NewsBlur 密码、API Key 或签名 secrets。
+另外运行一个独立的 Android 16 / API 36、google_apis x86_64 instrumentation job，
+只对 Debug 执行 `connectedDebugAndroidTest`，不重复三渠道设备矩阵。
+使用标准 `ubuntu-24.04` GitHub-hosted runner，不引入付费 runner 或外部服务；
+任务检查官方稳定镜像清单和真实 KVM 加速能力，缺失即失败，不降级为跳过测试。
+仅模拟器进程以执行器已有的 `kvm` 组运行；不修改组成员、udev 规则或设备权限，
+应用构建和测试仍以普通 runner 用户执行。每次创建全新 AVD，不缓存模拟器快照或应用数据。
+普通 CI 仅有 `contents: read` 权限，不使用 `pull_request_target`，
+不读取 NewsBlur 密码、API Key 或签名 secrets，不保存真实账号或应用私有数据。
 使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
 只有 main 写缓存，PR 只读。Debug 校验调试签名；Preview / Stable 验证未签名构建，
 不把它们作为可安装版本交付。所有 action 使用固定完整 SHA。
 
-获批准推送并运行后，在仓库 Actions → Android CI → 对应运行的 Artifacts 下载：
+main push、目标为 main 的 PR（含 draft）自动触发；手动运行可在
+[Actions → Android CI](https://github.com/Vincent1993/fluxa/actions/workflows/android-ci.yml)
+选择 Run workflow 和分支。PR 检出并验证确切 head commit；合并后 main push 会再次验证。
+查看运行的 commit、各 job 结论和日志，再在页面底部 Artifacts 下载（下载通常需要登录 GitHub）：
 
-- `fluxa-debug-apk`：解压得到可安装的 `app-debug.apk`，仅全部验证通过时上传。
+- `fluxa-debug-apk`：解压得到可安装的 `app-debug.apk`、`BUILD_COMMIT.txt`、
+  `SHA256SUMS` 和渠道元数据；仅 Debug 构建任务的单测、lint、APK 身份校验均成功后上传。
+  下载可用不等于其他渠道及设备任务已通过，须检查整次运行结论。
+  解压后可运行 `sha256sum -c SHA256SUMS`（macOS：`shasum -a 256 -c SHA256SUMS`）。
 - `fluxa-validation-debug/preview/stable`：各渠道 JUnit XML / HTML、lint 与 APK 元数据，
-  测试失败时也尝试上传。
+  测试失败时也尝试上传；`ci/` 中包含实际构建 commit、工具版本与成功产物的校验和。
+- `fluxa-validation-device-api36`：设备测试 XML / HTML、官方 SDK 包清单和 commit，
+  失败时也尝试收集已有报告。任务取消或报告生成前失败时可能没有测试报告。
 
-产物保留 14 天。首次将新工作流合入默认分支 main 后，Actions 页面才会显示
-“Run workflow”手动按钮；现有 PR 可先自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
+API 36 设备任务是否通过，以具体 commit 的 Actions 结论和报告为准；新增配置本身不是通过证据。
+自动化只使用测试夹具，不能替代真实 NewsBlur 联调、真实 TalkBack 的焦点顺序与朗读、
+字号缩放、视觉布局、真机电量 / 后台调度的人工验收，也未覆盖 API 26–35 的全部设备。
+对当前任务的成功不能声称验证了 Mac 尚未同步的版本。
+
+产物保留 14 天。手动按钮需要默认分支存在可手动触发的工作流；
+本仓库 main 已有该入口，新分支的改动也可通过 PR 自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
 
 CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名相同，
 不能直接覆盖不同签名的已有安装；不要为安装 CI 产物卸载而丢失缓存。
