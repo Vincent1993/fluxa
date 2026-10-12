@@ -101,7 +101,9 @@ Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、li
 另外运行一个独立的 Android 16 / API 36、google_apis x86_64 instrumentation job，
 只对 Debug 执行 `connectedDebugAndroidTest`，不重复三渠道设备矩阵。
 使用标准 `ubuntu-24.04` GitHub-hosted runner，不引入付费 runner 或外部服务；
-任务检查官方稳定镜像清单和现有 KVM 访问，缺失即失败，不降级为跳过测试。
+任务检查官方稳定镜像清单和真实 KVM 加速能力，缺失即失败，不降级为跳过测试。
+仅模拟器进程以执行器已有的 `kvm` 组运行；不修改组成员、udev 规则或设备权限，
+应用构建和测试仍以普通 runner 用户执行。每次创建全新 AVD，不缓存模拟器快照或应用数据。
 普通 CI 仅有 `contents: read` 权限，不使用 `pull_request_target`，
 不读取 NewsBlur 密码、API Key 或签名 secrets，不保存真实账号或应用私有数据。
 使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
@@ -127,8 +129,8 @@ API 36 设备任务是否通过，以具体 commit 的 Actions 结论和报告�
 字号缩放、视觉布局、真机电量 / 后台调度的人工验收，也未覆盖 API 26–35 的全部设备。
 对当前任务的成功不能声称验证了 Mac 尚未同步的版本。
 
-产物保留 14 天。首次将新工作流合入默认分支 main 后，Actions 页面才会显示
-“Run workflow”手动按钮；现有 PR 可先自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
+产物保留 14 天。手动按钮需要默认分支存在可手动触发的工作流；
+本仓库 main 已有该入口，新分支的改动也可通过 PR 自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
 
 CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名相同，
 不能直接覆盖不同签名的已有安装；不要为安装 CI 产物卸载而丢失缓存。
