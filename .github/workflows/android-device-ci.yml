@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fluxa-device-${{ github.event.pull_request.number || github.ref }}
+  group: fluxa-device-bounded-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -134,21 +134,25 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk \
             app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk device-reports
       - name: Preserve device diagnostics
+        timeout-minutes: 3
         if: ${{ always() }}
         run: |
           mkdir -p device-reports
-          "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
+          timeout 15s "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
           if [ "${{ job.status }}" != success ]; then
             cat device-reports/crash-buffer.log
             tail -n 100 device-reports/emulator.log 2>/dev/null || true
           fi
           for name in validation-reader.png validation-records.png; do
-            if "$ANDROID_HOME/platform-tools/adb" shell run-as com.fluxa.app.debug test -f "files/$name"; then
-              "$ANDROID_HOME/platform-tools/adb" exec-out run-as com.fluxa.app.debug cat "files/$name" > "device-reports/$name"
-              printf 'FLUXA_SCREENSHOT_%s_BASE64=%s\n' "$name" "$(base64 -w 0 "device-reports/$name")"
+            if timeout 10s "$ANDROID_HOME/platform-tools/adb" shell run-as com.fluxa.app.debug test -f "files/$name"; then
+              if timeout 15s "$ANDROID_HOME/platform-tools/adb" exec-out run-as com.fluxa.app.debug cat "files/$name" > "device-reports/$name"; then
+                printf 'FLUXA_SCREENSHOT_%s_BASE64=%s\n' "$name" "$(base64 -w 0 "device-reports/$name")"
+              else
+                rm -f "device-reports/$name"
+              fi
             fi
           done
-          "$ANDROID_HOME/platform-tools/adb" emu kill || true
+          timeout 10s "$ANDROID_HOME/platform-tools/adb" emu kill || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}
         with:
