@@ -1,6 +1,7 @@
 package com.fluxa.app
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.fluxa.app.domain.model.Article
@@ -26,7 +27,10 @@ class FeedListUiTest {
         }
         compose.onNodeWithText("离线缓存正文").assertIsDisplayed()
         compose.onNodeWithText("离线，可阅读缓存").assertIsDisplayed()
-        compose.onNodeWithText("收藏文章").performClick()
+        compose.onNodeWithText("收藏文章").assertDoesNotExist()
+        compose.onNodeWithTag("article-row-${article.id}").performTouchInput {
+            swipe(Offset(width * .15f, centerY), Offset(width * .6f, centerY), 600)
+        }
         assertEquals(article.id, starred)
         compose.onNodeWithText("离线缓存正文").performClick()
         assertEquals(article.id, opened)
@@ -41,9 +45,9 @@ class FeedListUiTest {
         compose.onNodeWithContentDescription("刷新").assertIsDisplayed()
         compose.onNodeWithContentDescription("添加订阅").performClick()
         compose.onNodeWithText("添加 RSS 订阅").assertIsDisplayed()
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithContentDescription("取消").performClick()
         compose.onNodeWithContentDescription("账户与同步设置").performClick()
-        compose.onNodeWithText("登录 NewsBlur").assertIsDisplayed()
+        compose.onNodeWithContentDescription("登录 NewsBlur").assertIsDisplayed()
     }
 
     @Test fun backgroundRefreshCanBeEnabledAndDisabledFromSettings() {

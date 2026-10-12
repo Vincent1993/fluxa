@@ -102,6 +102,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -123,6 +124,8 @@ android.testOptions.unitTests.all {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
+    implementation("org.jsoup:jsoup:1.23.2")
     val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
 
     implementation("androidx.core:core-ktx:1.19.1")

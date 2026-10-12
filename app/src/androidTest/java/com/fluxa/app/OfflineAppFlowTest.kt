@@ -24,7 +24,7 @@ class OfflineAppFlowTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val id = "999999:offline-ui-fixture"
         val db = Room.databaseBuilder(context, FluxaDatabase::class.java, "newsblur.db")
-            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2).build()
+            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2, DatabaseMigrations.FROM_3).build()
         // This test only runs in a dedicated emulator; it neither resets nor deletes the database.
         db.articleDao().upsertAll(listOf(ArticleEntity(id, "离线阅读验证：缓存正文与收藏", "测试订阅",
             1700000000, false, false, "<h2>离线缓存正文</h2><p>即使没有网络，这段正文仍然可以阅读。</p><p>字体档位与收藏状态可立即调整。</p>", "999999")))
@@ -48,12 +48,12 @@ class OfflineAppFlowTest {
                 compose.onNodeWithText("阅读本地缓存").performScrollTo().performClick()
                 compose.waitUntil(10000) { compose.onAllNodesWithText("离线阅读验证：缓存正文与收藏").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performScrollTo().performClick()
-                compose.waitUntil(10000) {
-                    compose.onAllNodesWithText("24号").fetchSemanticsNodes().isNotEmpty()
-                }
-                compose.onNodeWithText("24号").performScrollTo().performClick()
-                compose.onNodeWithText("收藏", useUnmergedTree = true).performClick()
-                compose.waitUntil(10000) { compose.onAllNodesWithText("取消收藏").fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("阅读设置与本地记录").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithContentDescription("阅读设置与本地记录").performClick()
+                compose.onNodeWithContentDescription("24号").performClick()
+                pressBack()
+                compose.onNodeWithContentDescription("收藏", useUnmergedTree = true).performClick()
+                compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("取消收藏").fetchSemanticsNodes().isNotEmpty() }
                 screenshot("validation-reader.png")
                 // Exercise AndroidX/system back after target 36 enables predictive back.
                 pressBack()
@@ -72,9 +72,9 @@ class OfflineAppFlowTest {
                 compose.waitUntil(10000) { compose.onAllNodesWithText("离线阅读验证：缓存正文与收藏").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performScrollTo().performClick()
                 compose.waitUntil(10000) {
-                    compose.onAllNodesWithText("取消收藏").fetchSemanticsNodes().isNotEmpty()
+                    compose.onAllNodesWithContentDescription("取消收藏").fetchSemanticsNodes().isNotEmpty()
                 }
-                compose.onNodeWithText("取消收藏").assertIsDisplayed()
+                compose.onNodeWithContentDescription("取消收藏").assertIsDisplayed()
             }
         } finally {
             db.pendingActionDao().getAllOrdered().filter { it.articleId == id }.forEach { db.pendingActionDao().deleteById(it.id) }

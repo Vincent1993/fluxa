@@ -57,7 +57,7 @@ jobs:
       - name: Install baseline, candidate and device SDK components
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platforms;android-35" "build-tools;34.0.0" \
+            "cmdline-tools;22.0" "platforms;android-35" "build-tools;34.0.0" \
             "platforms;android-37.0" "build-tools;36.0.0" "emulator" "platform-tools" \
             "system-images;android-$TEST_API;$TEST_TAG;x86_64"
       - name: Build old and new APKs with the same ephemeral test certificate
@@ -80,14 +80,17 @@ jobs:
           export ANDROID_USER_HOME="$RUNNER_TEMP/fluxa-upgrade-android"
           export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
           mkdir -p "$ANDROID_AVD_HOME"
-          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/22.0/bin/avdmanager" create avd \
             --force --name fluxa-device-ci --package "system-images;android-$TEST_API;$TEST_TAG;x86_64" \
             --device pixel_2 --path "$ANDROID_AVD_HOME/fluxa-device-ci.avd"
+          cat "$ANDROID_AVD_HOME/fluxa-device-ci.ini" | tee device-reports/avd-target.txt
+          grep -Fx "target=android-$TEST_API" "$ANDROID_AVD_HOME/fluxa-device-ci.ini"
+          cat "$ANDROID_HOME/cmdline-tools/22.0/source.properties" > device-reports/command-line-tools.txt
           printf 'hw.cpu.ncore=2\nhw.ramSize=4096\nhw.keyboard=no\ndisk.dataPartition.size=6G\n' >> "$ANDROID_AVD_HOME/fluxa-device-ci.avd/config.ini"
           printf 'ANDROID_USER_HOME=%s\nANDROID_AVD_HOME=%s\n' "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           "$ANDROID_HOME/platform-tools/adb" start-server
           sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --clear-groups --no-new-privs -- /usr/bin/env \
-            ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            HOME="$HOME" USER="$USER" ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
             ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_HOME" \
             "$ANDROID_HOME/emulator/emulator" -avd fluxa-device-ci -port 5554 \
             -no-window -no-audio -no-snapshot -no-boot-anim -gpu swangle -feature -Vulkan -accel on \

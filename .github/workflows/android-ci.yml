@@ -110,6 +110,13 @@ jobs:
         run: |
           ./gradlew ":app:test${VARIANT}UnitTest" ":app:lint$VARIANT" ":app:assemble$VARIANT" \
             --continue --no-daemon --stacktrace
+      - name: Preserve generated Room schema
+        if: ${{ success() && matrix.channel == 'debug' }}
+        run: |
+          schema=app/schemas/com.fluxa.app.data.local.FluxaDatabase/4.json
+          test -f "$schema"
+          cp "$schema" app/build/reports/ci/room-schema-v4.json
+          printf 'FLUXA_ROOM_SCHEMA_V4_BASE64=%s\n' "$(base64 -w 0 "$schema")"
       - name: Summarize actual unit test results
         if: ${{ always() }}
         run: python3 scripts/ci-test-summary.py app/build/test-results/test${{ matrix.variant }}UnitTest --output app/build/reports/ci/test-summary.json

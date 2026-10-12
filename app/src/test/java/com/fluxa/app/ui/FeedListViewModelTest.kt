@@ -57,6 +57,22 @@ class FeedListViewModelTest {
         assertEquals(1, repository.refreshCalls)
     }
 
+    @Test fun advancedFiltersRestoreAndRejectInvalidChangesAtomically() = runTest(dispatcher) {
+        val saved = SavedStateHandle(mapOf("tag" to "Tech", "dateFrom" to "1970-01-01", "dateTo" to "1970-01-02"))
+        val vm = FeedListViewModel(CachedRepository(), saved).also { store.put("advanced", it) }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+        runCurrent()
+        assertEquals("Tech", vm.state.value.tag)
+        assertEquals("1970-01-01", vm.state.value.dateFrom)
+        assertFalse(vm.setAdvancedFilters("Other", "2026-10-12", "2026-10-11"))
+        runCurrent()
+        assertEquals("Tech", vm.state.value.tag)
+        assertEquals("1970-01-01", saved.get<String>("dateFrom"))
+        assertTrue(vm.setAdvancedFilters("", "", ""))
+        runCurrent()
+        assertEquals(2, vm.state.value.articles.size)
+    }
+
     private class CachedRepository : ArticleRepository {
         val articles = MutableStateFlow(listOf(
             Article("one", "Kotlin", "Dev", Instant.EPOCH, false, false, "<p>Content</p>", "feed/one"),

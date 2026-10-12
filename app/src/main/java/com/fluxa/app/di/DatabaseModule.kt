@@ -19,7 +19,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FluxaDatabase {
         return Room.databaseBuilder(context, FluxaDatabase::class.java, "newsblur.db")
-            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2).build()
+            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2, DatabaseMigrations.FROM_3).build()
     }
 
     @Provides

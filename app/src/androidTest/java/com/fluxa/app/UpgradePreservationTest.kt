@@ -23,8 +23,11 @@ class UpgradePreservationTest {
         val marker = context.getSharedPreferences("fluxa_upgrade_fixture", Context.MODE_PRIVATE)
         val store = SecureTokenStore(context)
         val settings = BackgroundSyncSettings(context)
-        val db = Room.databaseBuilder(context, FluxaDatabase::class.java, "newsblur.db")
-            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2).build()
+        val builder = Room.databaseBuilder(context, FluxaDatabase::class.java, "newsblur.db")
+            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2)
+        if (mode != "seed") builder.addMigrations(DatabaseMigrations::class.java.getMethod("getFROM_3")
+            .invoke(DatabaseMigrations) as androidx.room.migration.Migration)
+        val db = builder.build()
         val id = "999998:upgrade-fixture"
         val account = "fluxa-upgrade-fixture"
         val cookie = "newsblur_sessionid=upgrade-fixture"
@@ -64,7 +67,7 @@ class UpgradePreservationTest {
             assertEquals(account, store.getNewsBlurAccount())
             assertEquals(cookie, store.getNewsBlurSession())
             assertTrue(settings.enabled)
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(if (mode == "seed") 3 else 4, db.openHelper.readableDatabase.version)
         } finally {
             if (mode != "seed" && marker.getBoolean("seeded", false)) {
                 db.pendingActionDao().getAllOrdered().filter { it.articleId == id }

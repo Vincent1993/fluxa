@@ -10,6 +10,6 @@ interface PendingActionDao {
     suspend fun getAllOrdered(): List<PendingActionEntity>
     @Query("DELETE FROM pending_actions WHERE id = :id")
     suspend fun deleteById(id: Long)
-    @Query("SELECT COUNT(*) FROM pending_actions WHERE actionType IN ('MarkRead', 'ToggleStar')")
+    @Query("SELECT COUNT(*) FROM pending_actions WHERE actionType IN ('MarkRead','ToggleStar') WHERE actionType IN ('MarkRead', 'ToggleStar')")
     fun observeCount(): Flow<Int>
 }

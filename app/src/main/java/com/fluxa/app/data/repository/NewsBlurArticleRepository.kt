@@ -1,5 +1,6 @@
 package com.fluxa.app.data.repository
 
+import com.fluxa.app.data.reader.*
 import androidx.room.withTransaction
 import com.fluxa.app.data.api.*
 import com.fluxa.app.data.local.*
@@ -24,11 +25,7 @@ class NewsBlurArticleRepository @Inject constructor(
     private val network = Mutex()
     private var source: String? = null
 
-    override fun getPagedArticles() = db.articleDao().observeAll().map { items ->
-        items.map { Article(it.id, it.title, it.feedName,
-            Instant.ofEpochSecond(it.publishedAtEpochSeconds), it.isRead, it.isStarred,
-            it.contentHtml, it.source) }
-    }
+    override fun getPagedArticles() = db.observeReaderArticles()
     override fun observeSubscriptions() = db.subscriptionDao().observeAll().map { items ->
         items.map { Subscription(it.id, it.title, it.url) }
     }
@@ -70,7 +67,7 @@ class NewsBlurArticleRepository @Inject constructor(
             val articles = response.stories.map { story ->
                 var article = ArticleEntity(story.hash, story.title.ifBlank { "（无标题）" },
                     feed.title, story.timestamp.toDoubleOrNull()?.toLong() ?: 0L,
-                    story.read == 1, story.starred, story.content, story.feedId.toString())
+                    story.read == 1, story.starred, story.content, story.feedId.toString(), story.tags.orEmpty().joinToString(","))
                 pending[story.hash].orEmpty().forEach { action ->
                     article = when (action.actionType) {
                         "MarkRead" -> article.copy(isRead = true)
@@ -81,6 +78,7 @@ class NewsBlurArticleRepository @Inject constructor(
                 article
             }
             db.articleDao().upsertAll(articles)
+            response.stories.forEach { db.updateReaderMetadata(it.hash, it.content, it.permalink.orEmpty(), it.author.orEmpty()) }
             db.syncStateDao().upsert(SyncStateEntity(feed.id,
                 if (response.stories.isEmpty()) null else (page + 1).toString(),
                 System.currentTimeMillis()))
@@ -88,6 +86,7 @@ class NewsBlurArticleRepository @Inject constructor(
     }
 
     override suspend fun markRead(id: String) {
+        if (id.startsWith("legacy/")) { db.articleDao().markRead(id); return }
         db.withTransaction {
             val article = db.articleDao().getById(id) ?: return@withTransaction
             if (!article.isRead) {
@@ -100,6 +99,9 @@ class NewsBlurArticleRepository @Inject constructor(
         if (db.pendingActionDao().getAllOrdered().count { it.actionType == "MarkRead" } >= 5) trySync()
     }
     override suspend fun toggleStar(id: String) {
+        if (id.startsWith("legacy/")) {
+            db.articleDao().setStarred(id, !(db.articleDao().getStarred(id) ?: false)); return
+        }
         db.withTransaction {
             val article = db.articleDao().getById(id) ?: return@withTransaction
             db.articleDao().setStarred(id, !article.isStarred)

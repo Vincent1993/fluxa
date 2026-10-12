@@ -27,7 +27,7 @@
 不使用机器预装的系统 Gradle。AGP 9.2.1 / Kotlin 2.4.20 与 Wrapper 配套，不能单独升级 Wrapper。
 首次构建需联网下载官方发行包与 Maven 依赖，并按官方提示处理适用的 SDK 许可。
 compileSdk / targetSdk 为 37，minSdk 为 26；Hilt 与 Room 使用 KSP。
-API 36 设备测试检查 Android 16 兼容性；另有 API 26 与 API 37／16 KB 覆盖升级测试。
+API 36 设备测试检查 Android 16 兼容性；另有 API 36 与 API 37／16 KB 覆盖升级测试。
 在 git 忽略的 `local.properties` 设置 SDK 路径：
 
 ```properties
@@ -63,7 +63,7 @@ Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道�
 
 数据库 v3 使用显式迁移，兼容原主干 v1 和 PR #4 / #5 / #6 的不同 v2 schema：
 保留正文、标记、来源 / 标签、同步状态及旧实验操作；没有 destructive fallback。
-未知 schema 会拒绝打开，避免静默删数据。旧笔记等实验操作保留但不重放。
+未知 schema 会拒绝打开，避免静默删数据。旧笔记等实验操作复制为本地记录并保留原始数据，不向新后端重放。
 
 ```sh
 python3 scripts/verify-migration-sql.py
@@ -94,7 +94,7 @@ README 的功能与工具链描述以本仓库已提交源码为准。Mac 上 `f
 同步最新源码（含必要未跟踪文件，排除凭据和个人数据）后，需要重新核对依赖与构建配置，
 再更新相应功能与配置并重新执行全部检查。当前 SDK 37 / Gradle 9.4.1 配置来自
 远端已提交的 `chore/android-seventeen`，不是对 Mac 未提交源码的推测。
-分支逐项处理及仍未覆盖的原型功能见 [分支整合记录](docs/branch-integration-2026-10-12.md)。
+分支逐项处理及实际功能移植及尚未覆盖范围见 [分支整合记录](docs/branch-integration-2026-10-12.md)。
 
 ## GitHub Actions 自动构建
 
@@ -132,9 +132,9 @@ API 36 设备任务是否通过，以具体 commit 的 Actions 结论和报告�
 对当前任务的成功不能声称验证了 Mac 尚未同步的版本。
 
 [Android device compatibility](.github/workflows/android-device-ci.yml) 另外对 Debug 运行
-API 26（4 KB）和 API 37.0（16 KB）两个独立执行器，校验真实 API／页大小，
+API 36（4 KB）和 API 37.0（16 KB）两个独立执行器，校验真实 API／页大小，
 以同一临时测试证书用 `adb install -r` 覆盖旧基线，断言数据库、队列、加密会话与设置保留，
-再运行完整设备套件。报告为 `fluxa-device-api-26` / `fluxa-device-api-37.0`，保留 14 天。
+再运行完整设备套件。报告为 `fluxa-device-api-36` / `fluxa-device-api-37.0`，保留 14 天。
 截图只作诊断；完整 JUnit、覆盖升级、页大小及原生对齐检查都必须成功。
 这组测试和 API 36 任务均不读取真实账号，不修改 KVM 或系统安全配置。
 历史 Android 17 本地结果见 [验证记录](docs/android-seventeen-validation-2026-10-03.md)，
@@ -151,3 +151,11 @@ CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名�
 Preview 草稿带 prerelease 标记；公开发布需明确批准。Stable 默认禁用。
 当前预览候选为 v0.3.0-preview.1 / versionCode 4，密钥生成与上传需用户安全接管。
 配置和完整操作见 [发布指南](docs/releases.md)。
+
+## 本地阅读资料与筛选
+
+文章保留作者、链接、摘要、字数与阅读进度；笔记、高亮、标签、归档和稍后读仅保存在本机，不同步到 NewsBlur。归档未读文章会同时标记已读，已读/收藏仍使用可靠队列同步。Room v4 非破坏性迁移保全旧字段和关系；账户设置可只读导入同渠道旧 `fluxa.db`，不混用旧服务账号。
+
+列表采用平面分隔与纯图标动作，无列表操作按钮。右划三段为已读／收藏／稍后读，左划三段为归档／稍后读／已读（48／120／220 dp）；无障碍自定义动作提供替代入口。阅读器可编辑或删除笔记高亮、管理标签、调整字号，并恢复进度。筛选可以组合真实订阅、标签、关键词、阅读集合与包含起止日期的范围，日期按本机时区。
+
+Mac `feature/github-library` 未提交的新阅读器、本地 RSS 和 Stars/GitHub Library 尚未取得；远端整合结果不代表这些本地功能已验证。

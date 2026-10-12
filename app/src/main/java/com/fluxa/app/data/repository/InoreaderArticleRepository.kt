@@ -1,5 +1,6 @@
 package com.fluxa.app.data.repository
 
+import com.fluxa.app.data.reader.*
 import androidx.room.withTransaction
 import com.fluxa.app.data.api.InoreaderApi
 import com.fluxa.app.data.api.model.StreamItem
@@ -25,11 +26,7 @@ class InoreaderArticleRepository @Inject constructor(
     private val network = Mutex()
     private var stream = READING_LIST
 
-    override fun getPagedArticles() = db.articleDao().observeAll().map { items ->
-        items.map { Article(it.id, it.title, it.feedName,
-            Instant.ofEpochSecond(it.publishedAtEpochSeconds), it.isRead, it.isStarred,
-            it.contentHtml, it.source) }
-    }
+    override fun getPagedArticles() = db.observeReaderArticles()
     override fun observeSubscriptions() = db.subscriptionDao().observeAll().map { items ->
         items.map { Subscription(it.id, it.title, it.url) }
     }
@@ -71,12 +68,14 @@ class InoreaderArticleRepository @Inject constructor(
                 entity
             }
             db.articleDao().upsertAll(items)
+            items.forEach { db.updateReaderMetadata(it.id, it.contentHtml, "", "") }
             db.syncStateDao().upsert(SyncStateEntity(stream, response.continuation,
                 System.currentTimeMillis()))
         }
     }
 
     override suspend fun markRead(id: String) {
+        if (id.startsWith("legacy/")) { db.articleDao().markRead(id); return }
         db.withTransaction {
             val article = db.articleDao().getById(id) ?: return@withTransaction
             if (!article.isRead) {
@@ -88,6 +87,9 @@ class InoreaderArticleRepository @Inject constructor(
     }
 
     override suspend fun toggleStar(id: String) {
+        if (id.startsWith("legacy/")) {
+            db.articleDao().setStarred(id, !(db.articleDao().getStarred(id) ?: false)); return
+        }
         db.withTransaction {
             val article = db.articleDao().getById(id) ?: return@withTransaction
             val next = !article.isStarred
