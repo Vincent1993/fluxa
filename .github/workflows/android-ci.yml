@@ -109,6 +109,9 @@ jobs:
         run: |
           ./gradlew ":app:test${VARIANT}UnitTest" ":app:lint$VARIANT" ":app:assemble$VARIANT" \
             --continue --no-daemon --stacktrace
+      - name: Summarize actual unit test results
+        if: ${{ always() }}
+        run: python3 scripts/ci-test-summary.py app/build/test-results/test${{ matrix.variant }}UnitTest --output app/build/reports/ci/test-summary.json
       - name: Verify actual APK identity and signing boundary
         env:
           CHANNEL: ${{ matrix.channel }}
@@ -203,17 +206,25 @@ jobs:
       - name: Run fixture tests on fresh API 36 emulator
         timeout-minutes: 15
         run: |
+          # Isolate all AVD configuration instead of relying on changing SDK home defaults.
+          export ANDROID_USER_HOME="$RUNNER_TEMP/fluxa-android"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           # A new AVD every run; no snapshot, account, or application-data cache.
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
-            --force -n fluxa_api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_7
-          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\n' >> "$HOME/.android/avd/fluxa_api36.avd/config.ini"
+            --force -n fluxa_api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_7 \
+            --path "$ANDROID_AVD_HOME/fluxa_api36.avd"
+          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\n' >> "$ANDROID_AVD_HOME/fluxa_api36.avd/config.ini"
           export ANDROID_SERIAL=emulator-5554
           "$ANDROID_HOME/platform-tools/adb" start-server
           cleanup() {
             "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" emu kill || true
           }
           trap cleanup EXIT
-          sudo -n setpriv --reuid "$(id -u)" --regid "$(getent group kvm | cut -d: -f3)" --clear-groups --no-new-privs -- "$ANDROID_HOME/emulator/emulator" \
+          sudo -n setpriv --reuid "$(id -u)" --regid "$(getent group kvm | cut -d: -f3)" --clear-groups --no-new-privs -- /usr/bin/env \
+            ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_HOME" \
+            "$ANDROID_HOME/emulator/emulator" \
             -avd fluxa_api36 -port 5554 -no-window -gpu swiftshader_indirect \
             -no-snapshot -noaudio -no-boot-anim -accel on \
             > app/build/reports/ci-device/emulator.log 2>&1 &
@@ -231,6 +242,9 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
           "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
           ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+      - name: Summarize actual device test results
+        if: ${{ always() }}
+        run: python3 scripts/ci-test-summary.py app/build/outputs/androidTest-results --output app/build/reports/ci-device/test-summary.json
       - name: Upload device validation reports
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
