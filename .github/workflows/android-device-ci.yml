@@ -58,7 +58,7 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
             "platforms;android-35" "build-tools;34.0.0" \
-            "platforms;android-37.0" "build-tools;36.0.0" "emulator" \
+            "platforms;android-37.0" "build-tools;36.0.0" "emulator" "platform-tools" \
             "system-images;android-$TEST_API;$TEST_TAG;x86_64"
       - name: Build old and new APKs with the same ephemeral test certificate
         run: |
@@ -85,7 +85,7 @@ jobs:
             --device pixel_2 --path "$ANDROID_AVD_HOME/fluxa-device-ci.avd"
           printf 'hw.cpu.ncore=2\nhw.ramSize=4096\nhw.keyboard=no\n' >> "$ANDROID_AVD_HOME/fluxa-device-ci.avd/config.ini"
           printf 'ANDROID_USER_HOME=%s\nANDROID_AVD_HOME=%s\n' "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
-          adb start-server
+          "$ANDROID_HOME/platform-tools/adb" start-server
           sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --clear-groups --no-new-privs -- /usr/bin/env \
             ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
             ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_HOME" \
@@ -94,7 +94,7 @@ jobs:
             > device-reports/emulator.log 2>&1 &
           emulator_pid=$!
           boot_deadline=$((SECONDS + 600))
-          while [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != 1 ]]; do
+          while [[ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != 1 ]]; do
             if ! kill -0 "$emulator_pid" 2>/dev/null || (( SECONDS >= boot_deadline )); then
               cat device-reports/emulator.log
               echo 'Emulator exited or failed to boot within 600 seconds.' >&2
@@ -102,15 +102,15 @@ jobs:
             fi
             sleep 2
           done
-          actual_api=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
-          actual_page=$(adb shell getconf PAGESIZE | tr -d '\r')
+          actual_api=$("$ANDROID_HOME/platform-tools/adb" shell getprop ro.build.version.sdk | tr -d '\r')
+          actual_page=$("$ANDROID_HOME/platform-tools/adb" shell getconf PAGESIZE | tr -d '\r')
           test "$actual_api" = "${TEST_API%%.*}"
           test "$actual_page" = "$EXPECTED_PAGE_SIZE"
           printf 'API=%s\nPAGE_SIZE=%s\n' "$actual_api" "$actual_page" > device-reports/device.txt
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-          adb shell input keyevent 82
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
       - name: Replace the baseline APK without uninstalling and verify retained data
         run: |
           bash scripts/device-upgrade-test.sh \
@@ -122,8 +122,8 @@ jobs:
         if: ${{ always() }}
         run: |
           mkdir -p device-reports
-          adb logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
-          adb emu kill || true
+          "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
+          "$ANDROID_HOME/platform-tools/adb" emu kill || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}
         with:
