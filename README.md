@@ -28,6 +28,8 @@
 
 想提前体验，可在最近一次成功的 [Android CI](https://github.com/Vincent1993/fluxa/actions/workflows/android-ci.yml) 中下载 `fluxa-debug-apk`，解压后安装 `app-debug.apk`。这是开发测试版，下载通常需要登录 GitHub；安装与升级注意事项见 [下载指南](docs/downloads.md)。
 
+Preview 与正式版可同时安装，各自保留本地数据；安装与更新规则见 [下载指南](docs/downloads.md)。
+
 ## 开始使用
 
 1. 准备 Android 8.0 或更新版本的设备，以及一个 [NewsBlur](https://www.newsblur.com/) 账号。

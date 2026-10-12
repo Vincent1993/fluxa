@@ -29,7 +29,7 @@ adb shell am start -n com.fluxa.app.debug/com.fluxa.app.MainActivity
 
 此前 Mac 的隔离工具链位于仓库同级的 `../toolchain`，可先 `source ../toolchain/env.sh`。
 Debug 的包名为 com.fluxa.app.debug；Preview 为 com.fluxa.app.preview；
-Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道升级需要固定签名。
+Stable 为 com.fluxa.app。Preview / Stable 使用用户已确认的同一份长期签名；包名不同，可同时安装，缓存和会话分别保存。各渠道更新保持各自包名与该长期证书，不自动互相覆盖或迁移数据。
 版本由 version.properties 管理；新发布的 versionCode 必须递增。
 渠道、签名和发布操作见 [发布指南](releases.md)，分支规范见 [贡献约定](../CONTRIBUTING.md)。
 
