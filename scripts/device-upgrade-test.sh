@@ -34,7 +34,7 @@ run_tests() {
     "${adb_cmd[@]}" shell am instrument -w "$@" \
         com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log"
     # Android's instrumentation command can exit zero even when JUnit fails.
-    if grep -q '^INSTRUMENTATION_STATUS_CODE: -3' "$reports/$label.log"; then
+    if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then
         echo 'Skipped instrumentation tests are not accepted.' >&2; exit 1
     fi
     grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
