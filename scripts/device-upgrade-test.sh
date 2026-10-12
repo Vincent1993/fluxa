@@ -41,13 +41,13 @@ run_tests() {
     printf '%s: ' "$label"
     grep -E '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
 }
-"${adb_cmd[@]}" install "$old_apk"
-"${adb_cmd[@]}" install "$old_test"
+"${adb_cmd[@]}" install --no-streaming "$old_apk"
+"${adb_cmd[@]}" install --no-streaming "$old_test"
 run_tests upgrade-seed -e class com.fluxa.app.UpgradePreservationTest -e fluxa.upgrade seed
 "${adb_cmd[@]}" shell dumpsys package com.fluxa.app.debug |
     grep -E 'versionCode=|versionName=' > "$reports/before-package.txt"
-"${adb_cmd[@]}" install -r "$new_apk"
-"${adb_cmd[@]}" install -r "$new_test"
+"${adb_cmd[@]}" install --no-streaming -r "$new_apk"
+"${adb_cmd[@]}" install --no-streaming -r "$new_test"
 "${adb_cmd[@]}" shell dumpsys package com.fluxa.app.debug |
     grep -E 'versionCode=|versionName=' > "$reports/after-package.txt"
 run_tests upgrade-verify -e class com.fluxa.app.UpgradePreservationTest -e fluxa.upgrade verify
