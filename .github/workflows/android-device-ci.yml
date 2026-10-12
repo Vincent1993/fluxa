@@ -104,7 +104,13 @@ jobs:
           done
           "$ANDROID_HOME/platform-tools/adb" shell df -h /data > device-reports/storage-before.txt
           actual_api=$("$ANDROID_HOME/platform-tools/adb" shell getprop ro.build.version.sdk | tr -d '\r')
-          actual_page=$("$ANDROID_HOME/platform-tools/adb" shell getconf PAGESIZE | tr -d '\r')
+          if actual_page=$("$ANDROID_HOME/platform-tools/adb" shell getconf PAGESIZE 2>/dev/null); then
+            actual_page=$(printf '%s' "$actual_page" | tr -d '\r')
+          else
+            # API26 has no getconf. Read the real kernel page size of the shell process.
+            actual_page=$("$ANDROID_HOME/platform-tools/adb" shell cat /proc/self/smaps | \
+              awk '/^KernelPageSize:/ && !seen {print $2 * 1024; seen = 1}')
+          fi
           test "$actual_api" = "${TEST_API%%.*}"
           test "$actual_page" = "$EXPECTED_PAGE_SIZE"
           printf 'API=%s\nPAGE_SIZE=%s\n' "$actual_api" "$actual_page" > device-reports/device.txt
@@ -112,6 +118,11 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
           "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
           "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
+          package_deadline=$((SECONDS + 120))
+          until "$ANDROID_HOME/platform-tools/adb" shell pm path android | grep -q '^package:'; do
+            (( SECONDS < package_deadline )) || { echo 'Package manager is not ready.' >&2; exit 1; }
+            sleep 2
+          done
       - name: Replace the baseline APK without uninstalling and verify retained data
         run: |
           bash scripts/device-upgrade-test.sh \
@@ -124,6 +135,10 @@ jobs:
         run: |
           mkdir -p device-reports
           "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
+          if [ "${{ job.status }}" != success ]; then
+            cat device-reports/crash-buffer.log
+            tail -n 100 device-reports/emulator.log 2>/dev/null || true
+          fi
           "$ANDROID_HOME/platform-tools/adb" emu kill || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}
