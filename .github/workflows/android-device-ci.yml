@@ -83,7 +83,7 @@ jobs:
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             --force --name fluxa-device-ci --package "system-images;android-$TEST_API;$TEST_TAG;x86_64" \
             --device pixel_2 --path "$ANDROID_AVD_HOME/fluxa-device-ci.avd"
-          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\nhw.keyboard=no\n' >> "$ANDROID_AVD_HOME/fluxa-device-ci.avd/config.ini"
+          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\nhw.keyboard=no\ndisk.dataPartition.size=6G\n' >> "$ANDROID_AVD_HOME/fluxa-device-ci.avd/config.ini"
           printf 'ANDROID_USER_HOME=%s\nANDROID_AVD_HOME=%s\n' "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           "$ANDROID_HOME/platform-tools/adb" start-server
           sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --clear-groups --no-new-privs -- /usr/bin/env \
@@ -102,6 +102,7 @@ jobs:
             fi
             sleep 2
           done
+          "$ANDROID_HOME/platform-tools/adb" shell df -h /data > device-reports/storage-before.txt
           actual_api=$("$ANDROID_HOME/platform-tools/adb" shell getprop ro.build.version.sdk | tr -d '\r')
           actual_page=$("$ANDROID_HOME/platform-tools/adb" shell getconf PAGESIZE | tr -d '\r')
           test "$actual_api" = "${TEST_API%%.*}"
