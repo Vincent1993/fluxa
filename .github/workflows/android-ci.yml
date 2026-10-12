@@ -181,27 +181,54 @@ jobs:
           printf '%s\n' "$FLUXA_BUILD_COMMIT" > app/build/reports/ci-device/BUILD_COMMIT.txt
           test "$(git rev-parse HEAD)" = "$FLUXA_BUILD_COMMIT"
           # Use existing runner access; never change device permissions or security settings.
-          test -r /dev/kvm && test -w /dev/kvm
+          test -c /dev/kvm
+          getent group kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list --channel=0 \
             > app/build/reports/ci-device/sdk-packages.txt
           grep -F 'system-images;android-36;google_apis;x86_64' \
             app/build/reports/ci-device/sdk-packages.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            "platforms;android-$BUILD_PLATFORM" "build-tools;$BUILD_TOOLS"
+            "platforms;android-$BUILD_PLATFORM" "build-tools;$BUILD_TOOLS" \
+            "emulator" "system-images;android-36;google_apis;x86_64"
+          # Change only the emulator process's effective group, never /dev/kvm permissions.
+          sudo -u "$(id -un)" -g kvm -- "$ANDROID_HOME/emulator/emulator" -accel-check \
+            > app/build/reports/ci-device/acceleration.txt 2>&1
+          cat "$ANDROID_HOME/emulator/source.properties" \
+            "$ANDROID_HOME/system-images/android-36/google_apis/x86_64/source.properties" \
+            > app/build/reports/ci-device/emulator-toolchain.txt
       - name: Build test APKs before starting emulator
         run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
       - name: Run fixture tests on fresh API 36 emulator
-        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7
-          ram-size: 2048M
-          emulator-boot-timeout: 600
-          disable-linux-hw-accel: 'false'
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+        timeout-minutes: 15
+        run: |
+          # A new AVD every run; no snapshot, account, or application-data cache.
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --force -n fluxa_api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_7
+          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\n' >> "$HOME/.android/avd/fluxa_api36.avd/config.ini"
+          export ANDROID_SERIAL=emulator-5554
+          "$ANDROID_HOME/platform-tools/adb" start-server
+          cleanup() {
+            "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" emu kill || true
+          }
+          trap cleanup EXIT
+          sudo -u "$(id -un)" -g kvm -- "$ANDROID_HOME/emulator/emulator" \
+            -avd fluxa_api36 -port 5554 -no-window -gpu swiftshader_indirect \
+            -no-snapshot -noaudio -no-boot-anim -accel on \
+            > app/build/reports/ci-device/emulator.log 2>&1 &
+          emulator_pid=$!
+          boot_deadline=$((SECONDS + 600))
+          while [[ "$("$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != 1 ]]; do
+            if ! kill -0 "$emulator_pid" 2>/dev/null || (( SECONDS >= boot_deadline )); then
+              cat app/build/reports/ci-device/emulator.log
+              echo 'Emulator exited or failed to boot within 600 seconds.' >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
+          ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload device validation reports
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
