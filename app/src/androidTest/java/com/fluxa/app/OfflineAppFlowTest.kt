@@ -3,6 +3,7 @@ package com.fluxa.app
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.room.Room
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -33,6 +34,7 @@ class OfflineAppFlowTest {
             // WebView renders on a separate compositor; allow its frame to settle.
             Thread.sleep(300)
             val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+                ?: return // Some legacy emulator display overrides cannot capture a frame.
             File(context.filesDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
         }
@@ -43,14 +45,21 @@ class OfflineAppFlowTest {
                 }
                 compose.onNodeWithText("登录 NewsBlur · 支持免费账号").assertIsDisplayed()
                 screenshot("validation-login.png")
-                compose.onNodeWithText("阅读本地缓存").performClick()
+                compose.onNodeWithText("阅读本地缓存").performScrollTo().performClick()
                 compose.waitUntil(10000) { compose.onAllNodesWithText("离线阅读验证：缓存正文与收藏").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performClick()
-                compose.onNodeWithText("24号").performClick()
+                compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performScrollTo().performClick()
+                compose.waitUntil(10000) {
+                    compose.onAllNodesWithText("24号").fetchSemanticsNodes().isNotEmpty()
+                }
+                compose.onNodeWithText("24号").performScrollTo().performClick()
                 compose.onNodeWithText("收藏", useUnmergedTree = true).performClick()
                 compose.waitUntil(10000) { compose.onAllNodesWithText("取消收藏").fetchSemanticsNodes().isNotEmpty() }
                 screenshot("validation-reader.png")
-                compose.onNodeWithContentDescription("返回文章列表").performClick()
+                // Exercise AndroidX/system back after target 36 enables predictive back.
+                pressBack()
+                compose.waitUntil(10000) {
+                    compose.onAllNodesWithText("搜索已缓存文章").fetchSemanticsNodes().isNotEmpty()
+                }
                 compose.onNodeWithText("离线阅读验证：缓存正文与收藏").assertIsDisplayed()
                 screenshot("validation-cache.png")
             }
@@ -59,9 +68,12 @@ class OfflineAppFlowTest {
             assertTrue(cached.isStarred)
             assertEquals(2, db.pendingActionDao().getAllOrdered().count { it.articleId == id })
             ActivityScenario.launch(MainActivity::class.java).use {
-                compose.onNodeWithText("阅读本地缓存").performClick()
+                compose.onNodeWithText("阅读本地缓存").performScrollTo().performClick()
                 compose.waitUntil(10000) { compose.onAllNodesWithText("离线阅读验证：缓存正文与收藏").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performClick()
+                compose.onNodeWithText("离线阅读验证：缓存正文与收藏").performScrollTo().performClick()
+                compose.waitUntil(10000) {
+                    compose.onAllNodesWithText("取消收藏").fetchSemanticsNodes().isNotEmpty()
+                }
                 compose.onNodeWithText("取消收藏").assertIsDisplayed()
             }
         } finally {

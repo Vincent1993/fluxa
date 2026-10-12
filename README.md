@@ -22,11 +22,12 @@
 
 ## 构建与安装
 
-当前 main 源码需要完整 JDK 17（含 javac）、Android SDK platform 35 / build-tools 34.0.0，
-设备安装另需 platform-tools。Gradle 8.9 Wrapper 已附带校验哈希，始终使用 `./gradlew`，
-不使用机器预装的系统 Gradle。AGP 8.5.2 / Kotlin 1.9.24 与 Wrapper 配套，不能单独升级 Wrapper。
+当前 main 源码需要完整 JDK 17（含 javac）、Android SDK platform 37.0 / build-tools 36.0.0，
+设备安装另需 platform-tools。Gradle 9.4.1 Wrapper 已附带校验哈希，始终使用 `./gradlew`，
+不使用机器预装的系统 Gradle。AGP 9.2.1 / Kotlin 2.4.20 与 Wrapper 配套，不能单独升级 Wrapper。
 首次构建需联网下载官方发行包与 Maven 依赖，并按官方提示处理适用的 SDK 许可。
-API 36 设备测试是运行时兼容检查，不表示 compileSdk / targetSdk 已升级到 36。
+compileSdk / targetSdk 为 37，minSdk 为 26；Hilt 与 Room 使用 KSP。
+API 36 设备测试检查 Android 16 兼容性；另有 API 26 与 API 37／16 KB 覆盖升级测试。
 在 git 忽略的 `local.properties` 设置 SDK 路径：
 
 ```properties
@@ -91,8 +92,9 @@ AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离
 README 的功能与工具链描述以本仓库已提交源码为准。Mac 上 `feature/github-library`
 尚未同步的功能不包含在当前远端验证中；这里的历史通过记录也不验证那些改动。
 同步最新源码（含必要未跟踪文件，排除凭据和个人数据）后，需要重新核对依赖与构建配置，
-再更新 CI 工具版本并重新执行全部检查。SDK 37 / Gradle 9.4.1 等新版配置须以该源码为依据，
-本次 CI 改造不预先升级它们。
+再更新相应功能与配置并重新执行全部检查。当前 SDK 37 / Gradle 9.4.1 配置来自
+远端已提交的 `chore/android-seventeen`，不是对 Mac 未提交源码的推测。
+分支逐项处理及仍未覆盖的原型功能见 [分支整合记录](docs/branch-integration-2026-10-12.md)。
 
 ## GitHub Actions 自动构建
 
@@ -106,7 +108,7 @@ Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、li
 应用构建和测试仍以普通 runner 用户执行。每次创建全新 AVD，不缓存模拟器快照或应用数据。
 普通 CI 仅有 `contents: read` 权限，不使用 `pull_request_target`，
 不读取 NewsBlur 密码、API Key 或签名 secrets，不保存真实账号或应用私有数据。
-使用 JDK 17、Gradle 8.9 Wrapper、SDK 35 / build-tools 34.0.0；Gradle 依赖和发行包使用基础缓存，
+使用 JDK 17、Gradle 9.4.1 Wrapper、SDK 37.0 / build-tools 36.0.0；Gradle 依赖和发行包使用基础缓存，
 只有 main 写缓存，PR 只读。Debug 校验调试签名；Preview / Stable 验证未签名构建，
 不把它们作为可安装版本交付。所有 action 使用固定完整 SHA。
 
@@ -126,8 +128,17 @@ main push、目标为 main 的 PR（含 draft）自动触发；手动运行可�
 
 API 36 设备任务是否通过，以具体 commit 的 Actions 结论和报告为准；新增配置本身不是通过证据。
 自动化只使用测试夹具，不能替代真实 NewsBlur 联调、真实 TalkBack 的焦点顺序与朗读、
-字号缩放、视觉布局、真机电量 / 后台调度的人工验收，也未覆盖 API 26–35 的全部设备。
+字号缩放、视觉布局、真机电量 / 后台调度的人工验收，也未覆盖 API 26–37 的全部设备。
 对当前任务的成功不能声称验证了 Mac 尚未同步的版本。
+
+[Android device compatibility](.github/workflows/android-device-ci.yml) 另外对 Debug 运行
+API 26（4 KB）和 API 37.0（16 KB）两个独立执行器，校验真实 API／页大小，
+以同一临时测试证书用 `adb install -r` 覆盖旧基线，断言数据库、队列、加密会话与设置保留，
+再运行完整设备套件。报告为 `fluxa-device-api-26` / `fluxa-device-api-37.0`，保留 14 天。
+截图只作诊断；完整 JUnit、覆盖升级、页大小及原生对齐检查都必须成功。
+这组测试和 API 36 任务均不读取真实账号，不修改 KVM 或系统安全配置。
+历史 Android 17 本地结果见 [验证记录](docs/android-seventeen-validation-2026-10-03.md)，
+当前整合 commit 是否通过必须查看其两份工作流结果，不能由历史记录推断。
 
 产物保留 14 天。手动按钮需要默认分支存在可手动触发的工作流；
 本仓库 main 已有该入口，新分支的改动也可通过 PR 自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
@@ -138,5 +149,5 @@ CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名�
 先验证候选构建，再在受保护环境使用持久密钥签名，最后创建 tag 和 draft Release。
 缺少密钥或指纹不匹配会失败；不会把未签名 APK 发布到 Release。
 Preview 草稿带 prerelease 标记；公开发布需明确批准。Stable 默认禁用。
-首次预览目标为 v0.2.0-preview.1 / versionCode 3，密钥生成与上传需用户安全接管。
+当前预览候选为 v0.3.0-preview.1 / versionCode 4，密钥生成与上传需用户安全接管。
 配置和完整操作见 [发布指南](docs/releases.md)。

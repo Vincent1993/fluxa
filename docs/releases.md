@@ -25,7 +25,7 @@ Branch naming applies to new human PRs; historical PR #1–6 and Dependabot are 
 ## Owner approval and secure signing setup
 
 Before first publication, approve the exact target: PR #7 into main; initial Preview tag
-v0.2.0-preview.1 / code 3; public prerelease in Vincent1993/fluxa.
+v0.3.0-preview.1 / code 4; public prerelease in Vincent1993/fluxa.
 The workflow creates a draft first. Public publication is a separate explicit action.
 Stable publication is disabled until the owner separately configures its signing and sets
 the repository variable ENABLE_STABLE_RELEASE=true; no Stable is planned in the first run.
@@ -89,7 +89,7 @@ The signing certificate fingerprint is public metadata; private key bytes and pa
 
 After the approved PR is merged, both workflow_dispatch entries become available from main.
 Choose Actions → Prepare Android Release → Run workflow → main, channel preview,
-tag v0.2.0-preview.1. Choosing another branch fails before the signing job.
+tag v0.3.0-preview.1. Choosing another branch fails before the signing job.
 The selected main commit is pinned throughout the run; moving main does not change the candidate.
 
 1. A read-only job checks main ancestry, exact tag/version/changelog and increasing code.

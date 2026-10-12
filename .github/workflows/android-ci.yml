@@ -17,8 +17,8 @@ concurrency:
 env:
   # Test the exact PR head; report it rather than GitHub's synthetic merge SHA.
   FLUXA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-  BUILD_PLATFORM: '35'
-  BUILD_TOOLS: '34.0.0'
+  BUILD_PLATFORM: '37.0'
+  BUILD_TOOLS: '36.0.0'
 
 defaults:
   run:
@@ -38,6 +38,7 @@ jobs:
         run: |
           python3 scripts/release.py version
           python3 scripts/test_release.py
+          python3 scripts/test_native_alignment.py
           python3 scripts/test_prepare_key.py
           python3 scripts/release.py preflight --channel preview --tag "$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import release; v=release.read_version(open("version.properties").read()); print(release.expected(v, "preview")["tag"])')"
       - name: Check new PR branch naming
