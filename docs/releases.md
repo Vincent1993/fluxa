@@ -3,14 +3,23 @@
 | Channel | Task | Package | Label | Signing |
 | --- | --- | --- | --- | --- |
 | Debug | assembleDebug | com.fluxa.app.debug | Fluxa Debug | Local/temporary debug key |
-| Preview | assemblePreview | com.fluxa.app.preview | Fluxa Preview | Persistent Preview certificate |
-| Stable | assembleRelease | com.fluxa.app | Fluxa | Separate persistent Stable certificate |
+| Preview | assemblePreview | com.fluxa.app.preview | Fluxa Preview | Shared persistent release certificate |
+| Stable | assembleRelease | com.fluxa.app | Fluxa | Same persistent release certificate as Preview |
 
 namespace remains com.fluxa.app. Debug is debuggable; Preview and Stable are not.
 Version names carry the channel and short commit for Debug/Preview; Stable is MAJOR.MINOR.PATCH.
 All use the committed VERSION_CODE. Each new published tag requires a code greater than all earlier release tags.
-The three apps can coexist and have separate accounts, databases and pending queues.
-Preview is not automatically converted into Stable. Upgrades within a channel retain data only with the same package and signing certificate.
+Preview (`com.fluxa.app.preview`, Fluxa Preview) and Stable (`com.fluxa.app`, Fluxa)
+use one owner-approved long-term signing identity. Their distinct application IDs allow simultaneous
+installation. Private databases, notes, login sessions and pending queues remain application-scoped;
+the manifest does not request sharedUserId, and provider authorities include applicationId.
+Debug continues to use its temporary development certificate.
+If both apps sign into the same NewsBlur account, server-synced read/star state naturally belongs to
+that account; sharing a certificate does not merge local data.
+Preview does not replace Stable or automatically transfer its local data. Each channel updates its
+own installation: Preview keeps com.fluxa.app.preview; Stable keeps com.fluxa.app. Compatible updates
+must keep that channel's application ID and the same shared long-term certificate, and satisfy version-code
+checks. A different signature must not be bypassed by uninstalling an installation with valuable data.
 
 ## Normal CI
 
@@ -22,66 +31,53 @@ Reports include package, version, debuggable flag, checksum and source commit.
 The installable Debug artifact and reports last 14 days.
 Branch naming applies to new human PRs; historical PR #1–6 and Dependabot are exempt.
 
-## Owner approval and secure signing setup
+## Owner-controlled shared signing setup
 
-The current candidate is Preview v0.3.0-preview.1 / code 4 from the integrated main.
-The release mechanism is authorized; creating new persistent keys or uploading credentials still
-requires owner-controlled secure setup. No successful persistent-signing run or release assets
-have been verified. Public Releases currently has no versions. Connector access to environment
-configuration is unavailable, so secret presence is unconfirmed rather than assumed missing.
+The owner has approved **one long-term signing identity shared by Preview and Stable**.
+Generation approval does not mean a keystore has already been generated. No new persistent key,
+password file or signing configuration was created by this documentation update.
 
-The workflow creates a draft first. Public publication is a separate explicit action.
-Stable remains gated by ENABLE_STABLE_RELEASE=true plus an independently pinned Stable certificate,
-an exact Stable changelog section and acceptance of the installed signed candidate. A later published
-channel must increase VERSION_CODE beyond earlier published tags. Do not enable Stable merely to
-bypass Preview setup or reuse a temporary Debug certificate.
+The current Preview candidate is v0.3.0-preview.1 / code 4. Public Releases has no versions, and
+current environment/secret configuration remains unverified: this connector does not expose those
+endpoints. Missing query access must not be described as missing credentials.
 
-Approve creation of the preview environment, restricted to main. Optional environment review
-must allow the owner to approve their own run in a one-person repository.
-main/tag protection settings are described in CONTRIBUTING.md and need separate approval.
+Generation must wait until the owner can securely retrieve and back up the key. The temporary cloud
+workspace has keytool and encryption tools, but no verified owner-controlled retrieval path. Do not
+create the sole long-term key there or generate/upload it through GitHub Actions. The owner can use
+their own Mac locally; key generation itself does not require an internet connection.
 
-The owner generates and uploads credentials in their own Mac terminal/browser secure takeover.
-The agent must not receive passwords in chat, read private keystore bytes or upload these secrets.
-No release key has been created merely by adding these scripts.
+For the approved shared-key setup:
 
-After approving generation, use JDK 17 and run interactively:
+1. Select a private directory **outside the repository**, for example
+   `~/Library/Application Support/FluxaSigning`. Use restrictive directory/file permissions
+   (700 / 600), and stop if the chosen keystore or password-file name already exists.
+2. In an owner-controlled terminal or signing UI, generate one encrypted PKCS12 keystore using an
+   existing keytool/JDK, with a secure random password kept outside assistant-visible output.
+   `fluxa-release` is a proposed alias, not an existing key. Do not create a second key for Stable.
+3. Confirm an encrypted owner-controlled backup of the keystore and password before configuring CI.
+   Private key bytes/passwords must not enter chat, logs, Git, Library or Actions artifacts. Only the
+   public certificate fingerprint and alias may be reported to the assistant.
+4. The owner configures the following effective settings for **both** `preview` and `stable` environments,
+   using the same keystore, alias, passwords and public certificate fingerprint. Secret transmission
+   and submission are performed by the owner in their secure session, never by the assistant.
 
-```sh
-bash scripts/prepare-preview-key.sh
-```
-
-Use your own interactive Terminal; do not pipe or redirect this script or enable terminal recording.
-It requires terminal stdin/stdout/stderr, disables shell command tracing and leaves password
-prompts connected to the terminal. This prompts for a password without adding it to command arguments.
-PKCS12 uses the same store
-and key password. It creates .signing/preview.p12, a one-line Base64 file and a public certificate
-report plus preview-public.pem (public certificate only), refuses overwrites, and applies private file permissions.
-Only the password-free public certificate inspection is redirected to the report. Keep an encrypted backup of
-the keystore and password outside this checkout. Losing the key prevents compatible updates.
-
-In GitHub → Settings → Environments → preview, the owner configures:
-
-| Kind | Name | Value |
+| Kind | Name | Shared value source |
 | --- | --- | --- |
-| Secret | ANDROID_KEYSTORE_BASE64 | Contents of .signing/preview-keystore.base64 |
-| Secret | ANDROID_KEYSTORE_PASSWORD | Password entered during generation |
-| Secret | ANDROID_KEY_ALIAS | fluxa-preview |
-| Secret | ANDROID_KEY_PASSWORD | Same PKCS12 password |
-| Variable | ANDROID_SIGNING_CERT_SHA256 | SHA256 certificate fingerprint from the public certificate report |
+| Secret | ANDROID_KEYSTORE_BASE64 | Owner's same encrypted PKCS12 keystore |
+| Secret | ANDROID_KEYSTORE_PASSWORD | Owner's private keystore password |
+| Secret | ANDROID_KEY_ALIAS | Same actual alias in that keystore |
+| Secret | ANDROID_KEY_PASSWORD | Same private key password |
+| Variable | ANDROID_SIGNING_CERT_SHA256 | Same public SHA-256 certificate fingerprint |
 
-GitHub CLI is an optional owner-operated upload path after their own secure login:
+The legacy `scripts/prepare-preview-key.sh` writes inside the repository's `.signing` directory.
+It is not the prescribed generator for this new outside-repository shared-key setup; do not run it
+as part of this handoff. No generator is executed by a PR or ordinary CI.
 
-```sh
-gh secret set ANDROID_KEYSTORE_BASE64 --repo Vincent1993/fluxa --env preview < .signing/preview-keystore.base64
-gh secret set ANDROID_KEYSTORE_PASSWORD --repo Vincent1993/fluxa --env preview
-gh secret set ANDROID_KEY_ALIAS --repo Vincent1993/fluxa --env preview
-gh secret set ANDROID_KEY_PASSWORD --repo Vincent1993/fluxa --env preview
-gh variable set ANDROID_SIGNING_CERT_SHA256 --repo Vincent1993/fluxa --env preview
-```
-
-Enter prompted values privately. Do not paste credentials into agent messages or terminals controlled by the agent.
-Remove the temporary Base64 transfer file after the owner confirms successful configuration and secure backup.
-The signing certificate fingerprint is public metadata; private key bytes and passwords are not.
+Public publication remains a separate explicit action. Stable still requires
+`ENABLE_STABLE_RELEASE=true`, its exact Stable changelog section, an increasing version code and
+acceptance of the installed signed candidate. Sharing a key does not bypass these checks.
+Environment restrictions/reviews and main/tag protection are separate settings; this update changes
+none of them. Preserve existing keys and settings until the owner has verified their identity.
 
 ## Prepare a release
 
@@ -129,10 +125,10 @@ The manual workflow in `.github/workflows/android-release.yml` is independent of
 It does not run for each development commit and never publishes a draft automatically. It prepares
 APK, SHA256SUMS, release notes and source/certificate metadata only after persistent signing passes.
 
-Initial Preview plan: after main CI passes and the owner confirms the Preview fingerprint and four
+Initial Preview plan: after main CI passes and the owner confirms the shared release fingerprint and four
 protected-environment secrets, dispatch from main with preview / v0.3.0-preview.1. Verify the downloaded
-signed APK and real-account behavior, then explicitly approve publication of that draft. Stable follows
-its own key, changelog, increasing version code and installation/upgrade acceptance.
+signed APK and real-account behavior, then explicitly approve publication of that draft. Stable uses the same signing identity, with its own changelog, increasing version code
+and installation/upgrade acceptance.
 
 No signing key was generated or read, no secrets uploaded, and no tag or Release created during branch
 integration. The connector returned HTTP 400 for environment metadata because its fetch allowlist does
