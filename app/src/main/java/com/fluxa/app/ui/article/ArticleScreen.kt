@@ -91,7 +91,8 @@ fun ArticleRoute(onBack: () -> Unit, viewModel: ArticleViewModel = hiltViewModel
     }
     if (showLibrary && article != null) {
         var tags by rememberSaveable { mutableStateOf(article.tags.joinToString(", ")) }
-        ModalBottomSheet(onDismissRequest = { showLibrary = false }) {
+        ModalBottomSheet(sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            onDismissRequest = { showLibrary = false }) {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(horizontal = 20.dp)) {
                 item {
                     Text("阅读设置", style = MaterialTheme.typography.titleMedium)

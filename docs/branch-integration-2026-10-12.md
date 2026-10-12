@@ -44,3 +44,11 @@ API37 曾在未进入升级断言前发生 SurfaceFlinger `hasReadColorBufferDma
 ## 尚未覆盖
 
 Mac `feature/github-library` 的未提交/未跟踪源码仍未同步，包括新阅读器、本地 RSS、Stars/GitHub Library 等。本次实现以现有远端分支为依据，不能称为 Mac 最新版本验证。新增 reader 模块和 usecase 提供明确接口，取得 Mac 快照后需逐项比较并整合重叠功能。真实账号、TalkBack 人工使用、视觉及真机后台调度仍需独立验收。
+
+## 最新回归记录
+
+`b9ab3eb95aa60d76dbdfab76ec80867566f62795` 的 [Android CI](https://github.com/Vincent1993/fluxa/actions/runs/38209060829) 全部通过：三渠道各 48/48 单测（零失败、错误、跳过），各渠道 lint、APK 身份与签名边界、16KB 原生对齐均通过；API36 13/13 设备用例通过。
+
+[覆盖升级矩阵](https://github.com/Vincent1993/fluxa/actions/runs/38209060818) 在 API36 与 API37/16KB 各通过 seed 1/1 和 upgrade-verify 1/1，但随后 13 项完整设备套件各有 1 项笔记面板可见性失败。Room 中笔记/高亮持久化、升级保全断言均已通过，不能把该 UI 失败称为数据丢失或整合成功。先滚动到记录仍不足以处理半展开面板的布局边界，后续修复阅读资料面板完整展开，并继续保留滚动与可见性断言。最终成功以修复后的整次 CI 为准。
+
+README 现为对外产品介绍。工具链、内部验证与边界移入 [开发文档](development.md)，用户下载见 [下载指南](downloads.md)，签名与 draft Release 操作见 [发布指南](releases.md)。尚无签名 Release 或发布流程运行；持久签名配置未能通过当前连接器核实，没有生成密钥、上传凭据或自动公开发行。

@@ -4,7 +4,7 @@
 
 - Stable 发布需单独验收、递增 VERSION_CODE、补充版本条目并配置正式签名。
 
-## [0.3.0-preview.1] - 2026-10-02
+## [0.3.0-preview.1] - 2026-10-12
 
 - 协调升级 AGP、Gradle、Kotlin／Compose、Hilt／Room KSP 与 AndroidX 稳定版本。
 - compile／target API 37（Android 17），继续支持 API 26 起的设备。

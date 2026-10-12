@@ -1,6 +1,6 @@
 # 开发、构建与验证
 
-产品介绍与下载入口见 [README](../README.md)。以下记录工具链、验证流程、数据迁移及已知工程边界。
+产品介绍与下载入口见 [README](../README.md)。以下记录工具链、验证流程、数据迁移及已知工程边界。命令均在仓库根目录执行。
 
 ## 构建与安装
 
@@ -31,7 +31,7 @@ adb shell am start -n com.fluxa.app.debug/com.fluxa.app.MainActivity
 Debug 的包名为 com.fluxa.app.debug；Preview 为 com.fluxa.app.preview；
 Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道升级需要固定签名。
 版本由 version.properties 管理；新发布的 versionCode 必须递增。
-渠道、签名和发布操作见 [发布指南](docs/releases.md)，分支规范见 [贡献约定](CONTRIBUTING.md)。
+渠道、签名和发布操作见 [发布指南](releases.md)，分支规范见 [贡献约定](../CONTRIBUTING.md)。
 
 运行流程：
 
@@ -51,10 +51,10 @@ Stable 为 com.fluxa.app。渠道可并存，缓存和会话独立。同渠道�
 python3 scripts/verify-migration-sql.py
 ```
 
-真实执行结果、报告与 APK 指纹见 [验证记录](docs/validation-2026-10-02.md)。
+真实执行结果、报告与 APK 指纹见 [验证记录](validation-2026-10-02.md)。
 2026-10-02 的后台刷新版本本地验证已通过：三渠道 APK 各自构建、各 34/34 单元测试、
 9/9 API 35 设备测试；各渠道 lint 为 0 错误 / 19 警告。
-详见 [后台刷新验证](docs/background-sync-validation-2026-10-02.md)。真实 NewsBlur 用户账号尚未联调。
+详见 [后台刷新验证](background-sync-validation-2026-10-02.md)。真实 NewsBlur 用户账号尚未联调。
 包含 Room/Robolectric、MockWebServer 协议与离线重放、ViewModel、
 AndroidKeyStore、Compose，以及真实 Activity / Hilt / Room / WebView 的离线重启验证。
 测试夹具不代替真实 NewsBlur 用户账号验收。
@@ -76,11 +76,11 @@ README 的功能与工具链描述以本仓库已提交源码为准。Mac 上 `f
 同步最新源码（含必要未跟踪文件，排除凭据和个人数据）后，需要重新核对依赖与构建配置，
 再更新相应功能与配置并重新执行全部检查。当前 SDK 37 / Gradle 9.4.1 配置来自
 远端已提交的 `chore/android-seventeen`，不是对 Mac 未提交源码的推测。
-分支逐项处理及实际功能移植及尚未覆盖范围见 [分支整合记录](docs/branch-integration-2026-10-12.md)。
+分支逐项处理及实际功能移植及尚未覆盖范围见 [分支整合记录](branch-integration-2026-10-12.md)。
 
 ## GitHub Actions 自动构建
 
-[Android CI](.github/workflows/android-ci.yml) 对 main push、目标为 main 的 PR 和手动触发运行：
+[Android CI](../.github/workflows/android-ci.yml) 对 main push、目标为 main 的 PR 和手动触发运行：
 Debug / Preview / Stable 三个构建类型各自执行 JUnit / Robolectric、lint、构建和 APK 身份校验。
 另外运行一个独立的 Android 16 / API 36、google_apis x86_64 instrumentation job，
 只对 Debug 执行 `connectedDebugAndroidTest`，不重复三渠道设备矩阵。
@@ -113,26 +113,26 @@ API 36 设备任务是否通过，以具体 commit 的 Actions 结论和报告�
 字号缩放、视觉布局、真机电量 / 后台调度的人工验收，也未覆盖 API 26–37 的全部设备。
 对当前任务的成功不能声称验证了 Mac 尚未同步的版本。
 
-[Android device compatibility](.github/workflows/android-device-ci.yml) 另外对 Debug 运行
+[Android device compatibility](../.github/workflows/android-device-ci.yml) 另外对 Debug 运行
 API 36（4 KB）和 API 37.0（16 KB）两个独立执行器，校验真实 API／页大小，
 以同一临时测试证书用 `adb install -r` 覆盖旧基线，断言数据库、队列、加密会话与设置保留，
 再运行完整设备套件。报告为 `fluxa-device-api-36` / `fluxa-device-api-37.0`，保留 14 天。
 截图只作诊断；完整 JUnit、覆盖升级、页大小及原生对齐检查都必须成功。
 这组测试和 API 36 任务均不读取真实账号，不修改 KVM 或系统安全配置。
-历史 Android 17 本地结果见 [验证记录](docs/android-seventeen-validation-2026-10-03.md)，
+历史 Android 17 本地结果见 [验证记录](android-seventeen-validation-2026-10-03.md)，
 当前整合 commit 是否通过必须查看其两份工作流结果，不能由历史记录推断。
 
 产物保留 14 天。手动按钮需要默认分支存在可手动触发的工作流；
-本仓库 main 已有该入口，新分支的改动也可通过 PR 自动运行。原单渠道记录见 [CI 验证记录](docs/ci-validation-2026-10-02.md)。
+本仓库 main 已有该入口，新分支的改动也可通过 PR 自动运行。原单渠道记录见 [CI 验证记录](ci-validation-2026-10-02.md)。
 
 CI 使用临时 Debug 签名，不保证与本地 APK 或另一轮 CI 的签名相同，
 不能直接覆盖不同签名的已有安装；不要为安装 CI 产物卸载而丢失缓存。
-另有 [Prepare Android Release](.github/workflows/android-release.yml)，仅从 main 手动触发：
+另有 [Prepare Android Release](../.github/workflows/android-release.yml)，仅从 main 手动触发：
 先验证候选构建，再在受保护环境使用持久密钥签名，最后创建 tag 和 draft Release。
 缺少密钥或指纹不匹配会失败；不会把未签名 APK 发布到 Release。
 Preview 草稿带 prerelease 标记；公开发布需明确批准。Stable 默认禁用。
 当前预览候选为 v0.3.0-preview.1 / versionCode 4，密钥生成与上传需用户安全接管。
-配置和完整操作见 [发布指南](docs/releases.md)。
+配置和完整操作见 [发布指南](releases.md)。
 
 ## 本地阅读资料与筛选
 
