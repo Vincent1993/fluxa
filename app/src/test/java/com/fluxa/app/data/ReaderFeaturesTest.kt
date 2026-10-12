@@ -86,6 +86,13 @@ class ReaderFeaturesTest {
         assertEquals(.45f, article.readingProgress, .001f); assertEquals(20L, article.archivedAtEpochSeconds)
         assertEquals(listOf("Old tag"), article.tags); assertEquals(1, article.annotationCount)
         local.archive(article.id)
+        local.tags(article.id, listOf("Edited tag"))
+        local.deleteAnnotation(local.annotations(article.id).first().single().id)
+        assertEquals(0, local.importLegacy())
+        val reimported = db.observeReaderArticles().first().first { it.id == article.id }
+        assertNull(reimported.archivedAtEpochSeconds)
+        assertEquals(listOf("Edited tag"), reimported.tags)
+        assertEquals(0, reimported.annotationCount)
         assertTrue(db.pendingActionDao().getAllOrdered().isEmpty())
         context.openOrCreateDatabase("fluxa.db", Context.MODE_PRIVATE, null).use { old ->
             assertEquals(2, old.version)

@@ -60,7 +60,7 @@ class FeedListUiTest {
             }
         }
         compose.onNodeWithContentDescription("账户与同步设置").performClick()
-        val toggle = compose.onNode(isToggleable())
+        val toggle = compose.onNode(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Switch))
         toggle.assertIsOff().performClick().assertIsOn()
         assertEquals(true, changed)
         toggle.performClick().assertIsOff()

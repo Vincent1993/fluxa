@@ -39,7 +39,7 @@ PR #3、#5、#6 的功能已在当前 NewsBlur 架构重新实现，不通过伪
 - Reeder 方向的平面列表、暖色阅读器、纯图标动作。列表无显式操作按钮：右划三段为已读/收藏/稍后读，左划三段为归档/稍后读/已读，阈值 48/120/220 dp；另提供无障碍自定义动作。阅读器可调整字号、编辑/删除笔记高亮与标签、保存滚动进度。
 - 测试覆盖真实数据持久化、丰富 v2 与导出 v3 迁移、只读导入幂等、刷新保全、筛选边界、HTML 净化/跨行内标签高亮，以及设备上的动作持久化和实际手势。执行通过与否以最终 commit 的 CI 为准。
 
-API37 曾在未进入升级断言前发生 SurfaceFlinger `hasReadColorBufferDma` 崩溃。runner 的旧 Command-line Tools 误将小版本 SDK 写成 `target=android-0` 是上游已报告的同症状原因；现固定 Command-line Tools 22.0 并断言真实 AVD target，保留失败报告。API26 旧 run 的成功记录保留，后续升级矩阵专注 API36 与 API37/16KB。
+API37 曾在未进入升级断言前发生 SurfaceFlinger `hasReadColorBufferDma` 崩溃。runner 的旧 Command-line Tools 误将小版本 SDK 写成 `target=android-0` 是 [runner-images 上游报告](https://github.com/actions/runner-images/issues/14484) 中的同症状原因；现固定 Command-line Tools 22.0 并断言真实 AVD target，保留失败报告。API26 旧 run 的成功记录保留，后续升级矩阵专注 API36 与 API37/16KB。
 
 ## 尚未覆盖
 

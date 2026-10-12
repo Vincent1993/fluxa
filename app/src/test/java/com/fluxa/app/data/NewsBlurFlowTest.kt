@@ -52,7 +52,8 @@ class NewsBlurFlowTest {
                         """{"stories":[]}"""
                     path == "/reader/feed/12" -> """{"stories":[{"story_hash":"12:abc123","story_feed_id":12,
                         "story_title":"Cached story","story_content":"<p>Offline body</p>",
-                        "story_timestamp":"1700000000","read_status":${if (read) 1 else 0},"starred":$starred}]}"""
+                        "story_timestamp":"1700000000","read_status":${if (read) 1 else 0},"starred":$starred,
+                        "story_permalink":"https://example.test/story","story_authors":"Ada","story_tags":["Remote"]}]}"""
                     else -> return MockResponse().setResponseCode(404)
                 }
                 return MockResponse().setBody(body)
@@ -113,6 +114,23 @@ class NewsBlurFlowTest {
         assertNull(db.syncStateDao().getBySource("12")!!.cursor)
         assertEquals(1, repository.getPagedArticles().first().size)
         assertFalse(calls.any { it.contains("river_stories") })
+    }
+
+    @Test fun refreshedServerMetadataKeepsLocalReadingRecordsAndNeverQueuesUnsupportedActions() = runBlocking {
+        repository.refresh()
+        val local = com.fluxa.app.data.reader.LocalReadingRepository(db, ApplicationProvider.getApplicationContext())
+        local.note("12:abc123", "Keep after refresh")
+        local.tags("12:abc123", listOf("Local")); local.progress("12:abc123", .55f); local.save("12:abc123")
+        repository.refresh()
+        val article = repository.getPagedArticles().first().single()
+        assertEquals("Ada", article.author)
+        assertEquals("https://example.test/story", article.url)
+        assertEquals("Offline body", article.excerpt)
+        assertEquals(.55f, article.readingProgress, .001f)
+        assertEquals(setOf("Local", "Remote"), article.tags.toSet())
+        assertEquals(1, article.annotationCount)
+        assertNotNull(article.savedAtEpochSeconds)
+        assertTrue(db.pendingActionDao().getAllOrdered().isEmpty())
     }
 
     @Test fun loginContractUsesFormAndReceivesCookieWithoutApiKey() = runBlocking {

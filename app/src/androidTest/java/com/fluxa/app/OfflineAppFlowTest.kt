@@ -11,6 +11,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import com.fluxa.app.data.local.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.*
 import org.junit.Assert.*
 import java.io.File
@@ -52,6 +53,13 @@ class OfflineAppFlowTest {
                 compose.onNodeWithContentDescription("阅读设置与本地记录").performClick()
                 compose.onNodeWithContentDescription("24号").performClick()
                 pressBack()
+                compose.onNodeWithContentDescription("添加本地笔记").performClick()
+                compose.onNodeWithText("笔记").performTextInput("设备上输入的阅读笔记")
+                compose.onNodeWithContentDescription("保存本地记录").performClick()
+                compose.onNodeWithContentDescription("添加本地高亮").performClick()
+                compose.onNodeWithText("从正文复制需要高亮的文字").performTextInput("即使没有网络")
+                compose.onNodeWithContentDescription("保存本地记录").performClick()
+                compose.onNodeWithContentDescription("稍后读").performClick()
                 compose.onNodeWithContentDescription("收藏", useUnmergedTree = true).performClick()
                 compose.waitUntil(10000) { compose.onAllNodesWithContentDescription("取消收藏").fetchSemanticsNodes().isNotEmpty() }
                 screenshot("validation-reader.png")
@@ -66,6 +74,8 @@ class OfflineAppFlowTest {
             val cached = db.articleDao().getById(id)!!
             assertTrue(cached.isRead)
             assertTrue(cached.isStarred)
+            assertEquals(2, db.readerDao().observeAnnotations(id).first().size)
+            assertNotNull(db.readerDao().metadata(id)!!.savedAtEpochSeconds)
             assertEquals(2, db.pendingActionDao().getAllOrdered().count { it.articleId == id })
             ActivityScenario.launch(MainActivity::class.java).use {
                 compose.onNodeWithText("阅读本地缓存").performScrollTo().performClick()
@@ -75,9 +85,15 @@ class OfflineAppFlowTest {
                     compose.onAllNodesWithContentDescription("取消收藏").fetchSemanticsNodes().isNotEmpty()
                 }
                 compose.onNodeWithContentDescription("取消收藏").assertIsDisplayed()
+                compose.onNodeWithContentDescription("取消稍后读").assertIsDisplayed()
+                compose.onNodeWithContentDescription("阅读设置与本地记录").performClick()
+                compose.onNodeWithText("设备上输入的阅读笔记").assertIsDisplayed()
+                compose.onNodeWithText("即使没有网络").assertIsDisplayed()
             }
         } finally {
             db.pendingActionDao().getAllOrdered().filter { it.articleId == id }.forEach { db.pendingActionDao().deleteById(it.id) }
+            db.openHelper.writableDatabase.execSQL("DELETE FROM reader_annotations WHERE articleId = ?", arrayOf(id))
+            db.openHelper.writableDatabase.execSQL("DELETE FROM reader_metadata WHERE articleId = ?", arrayOf(id))
             db.openHelper.writableDatabase.execSQL("DELETE FROM articles WHERE id = ?", arrayOf(id))
             db.close()
         }

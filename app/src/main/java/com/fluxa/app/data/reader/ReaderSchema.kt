@@ -17,9 +17,17 @@ object ReaderSchema {
         db.execSQL("CREATE TABLE IF NOT EXISTS reader_article_tags (articleId TEXT NOT NULL, tagId TEXT NOT NULL, PRIMARY KEY(articleId,tagId))")
     }
     fun copyLegacy(query: (String) -> Cursor, db: SupportSQLiteDatabase, prefix: String = "") {
+        val imported = mutableSetOf<String>()
+        fun eligible(id: String) = prefix.isEmpty() || id in imported
         fun exists(table: String) = query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'").use { it.moveToFirst() }
         if (exists("articles")) query("SELECT * FROM articles").use { c ->
             while (c.moveToNext()) {
+                val articleId = prefix + c.string("id")
+                if (prefix.isNotEmpty()) {
+                    val present = db.query("SELECT articleId FROM reader_metadata WHERE articleId=?", arrayOf(articleId)).use { it.moveToFirst() }
+                    if (present) continue
+                    imported += articleId
+                }
                 val body = c.string("contentHtml")
                 val plain = ReaderHtml.text(body)
                 db.execSQL("INSERT OR IGNORE INTO reader_metadata VALUES (?,?,?,?,?,?,?,?,?)", arrayOf(
@@ -29,7 +37,7 @@ object ReaderSchema {
             }
         }
         if (exists("highlights")) query("SELECT * FROM highlights").use { c ->
-            while (c.moveToNext()) db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf(
+            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_annotations VALUES (?,?,?,?,?,?,?,?)", arrayOf(
                 prefix + "legacy/highlight/" + c.string("id"), prefix + c.string("articleId"), "highlight",
                 c.string("quote"), c.string("note"), c.string("color", "#f1d28a"), c.long("createdAtEpochSeconds"), c.long("updatedAtEpochSeconds")))
         }
@@ -37,11 +45,12 @@ object ReaderSchema {
             while (c.moveToNext()) db.execSQL("INSERT OR IGNORE INTO reader_tags VALUES (?,?,?,?)", arrayOf(prefix + c.string("id"), c.string("name"), c.long("createdAtEpochSeconds"), c.long("updatedAtEpochSeconds")))
         }
         if (exists("article_tag_cross_ref")) query("SELECT * FROM article_tag_cross_ref").use { c ->
-            while (c.moveToNext()) db.execSQL("INSERT OR IGNORE INTO reader_article_tags VALUES (?,?)", arrayOf(prefix + c.string("articleId"), prefix + c.string("tagId")))
+            while (c.moveToNext()) if (eligible(prefix + c.string("articleId"))) db.execSQL("INSERT OR IGNORE INTO reader_article_tags VALUES (?,?)", arrayOf(prefix + c.string("articleId"), prefix + c.string("tagId")))
         }
         if (exists("pending_actions")) query("SELECT * FROM pending_actions").use { c ->
             while (c.moveToNext()) {
                 val id = prefix + c.string("articleId")
+                if (!eligible(id)) continue
                 val kind = c.string("actionType")
                 val time = c.long("createdAtEpochMillis") / 1000
                 when (kind) {
