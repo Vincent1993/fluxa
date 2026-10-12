@@ -183,7 +183,7 @@ jobs:
           # Use existing runner access; never change device permissions or security settings.
           test -c /dev/kvm
           getent group kvm
-          sudo -u "$(id -un)" -g kvm -- id
+          sudo -n setpriv --reuid "$(id -u)" --regid "$(getent group kvm | cut -d: -f3)" --clear-groups --no-new-privs -- id
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list --channel=0 \
             > app/build/reports/ci-device/sdk-packages.txt
           grep -F 'system-images;android-36;google_apis;x86_64' \
@@ -191,8 +191,9 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
             "platforms;android-$BUILD_PLATFORM" "build-tools;$BUILD_TOOLS" \
             "emulator" "system-images;android-36;google_apis;x86_64"
-          # Change only the emulator process's effective group, never /dev/kvm permissions.
-          sudo -u "$(id -un)" -g kvm -- "$ANDROID_HOME/emulator/emulator" -accel-check \
+          # setpriv drops immediately to the runner UID with only the existing KVM group.
+          # No group membership, sudoers, udev, or device permissions are modified.
+          sudo -n setpriv --reuid "$(id -u)" --regid "$(getent group kvm | cut -d: -f3)" --clear-groups --no-new-privs -- "$ANDROID_HOME/emulator/emulator" -accel-check \
             2>&1 | tee app/build/reports/ci-device/acceleration.txt
           cat "$ANDROID_HOME/emulator/source.properties" \
             "$ANDROID_HOME/system-images/android-36/google_apis/x86_64/source.properties" \
@@ -212,7 +213,7 @@ jobs:
             "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" emu kill || true
           }
           trap cleanup EXIT
-          sudo -u "$(id -un)" -g kvm -- "$ANDROID_HOME/emulator/emulator" \
+          sudo -n setpriv --reuid "$(id -u)" --regid "$(getent group kvm | cut -d: -f3)" --clear-groups --no-new-privs -- "$ANDROID_HOME/emulator/emulator" \
             -avd fluxa_api36 -port 5554 -no-window -gpu swiftshader_indirect \
             -no-snapshot -noaudio -no-boot-anim -accel on \
             > app/build/reports/ci-device/emulator.log 2>&1 &
