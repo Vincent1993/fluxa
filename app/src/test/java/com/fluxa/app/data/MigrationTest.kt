@@ -49,7 +49,7 @@ class MigrationTest {
             old.version = version
         }
         val db = Room.databaseBuilder(context, FluxaDatabase::class.java, name)
-            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2)
+            .addMigrations(DatabaseMigrations.FROM_1, DatabaseMigrations.FROM_2, DatabaseMigrations.FROM_3)
             .allowMainThreadQueries().build()
         try {
             // Opening through Room also validates every resulting table against its schema.

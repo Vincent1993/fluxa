@@ -45,5 +45,8 @@ data class NewsBlurStory(
     @Json(name = "story_content") val content: String = "",
     @Json(name = "story_timestamp") val timestamp: String = "0",
     @Json(name = "read_status") val read: Int = 0,
-    val starred: Boolean = false
+    val starred: Boolean = false,
+    @Json(name = "story_permalink") val permalink: String? = null,
+    @Json(name = "story_authors") val author: String? = null,
+    @Json(name = "story_tags") val tags: List<String>? = null
 )

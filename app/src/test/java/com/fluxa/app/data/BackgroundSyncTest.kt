@@ -110,6 +110,16 @@ class BackgroundSyncTest {
         assertEquals(WorkInfo.State.CANCELLED, manager.getWorkInfosForUniqueWork(BackgroundSyncScheduler.WORK_NAME).get().single().state)
     }
 
+    @Test fun periodicRequestKeepsNetworkBatteryAndRetryBudget() {
+        val work = BackgroundSyncScheduler.request().workSpec
+        assertEquals(java.util.concurrent.TimeUnit.HOURS.toMillis(1), work.intervalDuration)
+        assertEquals(java.util.concurrent.TimeUnit.HOURS.toMillis(1), work.initialDelay)
+        assertEquals(java.util.concurrent.TimeUnit.MINUTES.toMillis(15), work.backoffDelayDuration)
+        assertEquals(BackoffPolicy.EXPONENTIAL, work.backoffPolicy)
+        assertEquals(NetworkType.UNMETERED, work.constraints.requiredNetworkType)
+        assertTrue(work.constraints.requiresBatteryNotLow())
+    }
+
     private class RecordingRepository : ArticleRepository {
         var calls = 0
         var failure: Exception? = null

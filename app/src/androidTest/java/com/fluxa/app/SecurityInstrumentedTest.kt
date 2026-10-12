@@ -23,6 +23,11 @@ import java.util.concurrent.TimeUnit
 // Exercise AndroidKeyStore with isolated preferences; never clear a user's session.
 @RunWith(AndroidJUnit4::class)
 class SecurityInstrumentedTest {
+    @Test fun packagedNativeGraphicsLibraryLoadsOnTheDevice() {
+        // Exercise the actual native binary, including on the 16 KB API 37 image.
+        System.loadLibrary("androidx.graphics.path")
+    }
+
     private fun testStore(): SecureTokenStore {
         return SecureTokenStore(ApplicationProvider.getApplicationContext<Context>(), "instrumentation_fluxa_auth")
     }

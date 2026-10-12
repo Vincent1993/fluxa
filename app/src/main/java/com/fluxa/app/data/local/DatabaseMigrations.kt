@@ -1,16 +1,26 @@
 package com.fluxa.app.data.local
 
+import com.fluxa.app.data.reader.ReaderSchema
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object DatabaseMigrations {
     val FROM_1 = upgrade(1)
     val FROM_2 = upgrade(2)
+    val FROM_3 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            ReaderSchema.create(db)
+            ReaderSchema.copyLegacy({ db.query(it) }, db)
+        }
+    }
 
     // The unmerged branches used three different v2 schemas. Inspect columns and
     // rebuild only the article table so all paths have identical Room defaults.
     private fun upgrade(from: Int) = object : Migration(from, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
+            ReaderSchema.create(db)
+            // Capture richer v2 metadata before normalizing the core article table.
+            ReaderSchema.copyLegacy({ db.query(it) }, db)
             val columns = mutableSetOf<String>()
             db.query("PRAGMA table_info(articles)").use { cursor ->
                 while (cursor.moveToNext()) columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))

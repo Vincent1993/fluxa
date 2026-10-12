@@ -81,7 +81,7 @@ class ReleaseChecksTest(unittest.TestCase):
 
     def test_unsigned_or_wrong_certificate_cannot_be_published(self):
         manifest = ('A: package="com.fluxa.app.preview"\nA: versionName="0.2.0-preview.1+aaaaaaa"\n'
-                    'A: versionCode=3\nA: label="Fluxa Preview"\nA: minSdkVersion=26\nA: targetSdkVersion=35')
+                    'A: versionCode=3\nA: label="Fluxa Preview"\nA: minSdkVersion=26\nA: targetSdkVersion=37')
         metadata = release.expected(VERSION, "preview", SHA)
         for code, log in [(1, "unsigned"), (0, "Number of signers: 1\nSigner #1 certificate SHA-256 digest: " + "b" * 64),
                           (0, "Number of signers: 1\nSigner #1 certificate SHA-256 digest: " + "c" * 64 + "\nCN=Android Debug")]:
