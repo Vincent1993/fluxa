@@ -27,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - api: '26'
+          - api: '36'
             tag: google_apis
             page_size: '4096'
           - api: '37.0'
@@ -90,7 +90,7 @@ jobs:
             ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
             ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_HOME" \
             "$ANDROID_HOME/emulator/emulator" -avd fluxa-device-ci -port 5554 \
-            -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader -accel on \
+            -no-window -no-audio -no-snapshot -no-boot-anim -gpu swangle -feature -Vulkan -accel on \
             > device-reports/emulator.log 2>&1 &
           emulator_pid=$!
           boot_deadline=$((SECONDS + 600))
