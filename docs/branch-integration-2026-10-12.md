@@ -52,3 +52,14 @@ Mac `feature/github-library` 的未提交/未跟踪源码仍未同步，包括�
 [覆盖升级矩阵](https://github.com/Vincent1993/fluxa/actions/runs/38209060818) 在 API36 与 API37/16KB 各通过 seed 1/1 和 upgrade-verify 1/1，但随后 13 项完整设备套件各有 1 项笔记面板可见性失败。Room 中笔记/高亮持久化、升级保全断言均已通过，不能把该 UI 失败称为数据丢失或整合成功。先滚动到记录仍不足以处理半展开面板的布局边界，后续修复阅读资料面板完整展开，并继续保留滚动与可见性断言。最终成功以修复后的整次 CI 为准。
 
 README 现为对外产品介绍。工具链、内部验证与边界移入 [开发文档](development.md)，用户下载见 [下载指南](downloads.md)，签名与 draft Release 操作见 [发布指南](releases.md)。尚无签名 Release 或发布流程运行；持久签名配置未能通过当前连接器核实，没有生成密钥、上传凭据或自动公开发行。
+
+## 修复后的功能验收
+
+`68294bc05353ace1da142797779f3120ac7cddbe` 的 [Android CI](https://github.com/Vincent1993/fluxa/actions/runs/38210715842) 与 [覆盖升级矩阵](https://github.com/Vincent1993/fluxa/actions/runs/38210715864) 均全部通过。三渠道各 48/48 单测，零失败、错误和跳过；API36 常规设备 13/13；API36 与 API37/16KB 各 seed 1/1、upgrade-verify 1/1、完整套件 13/13。现有数据库、队列、加密测试会话和设置的升级断言保留，笔记面板的可见性断言也继续执行。诊断命令有超时，取消后不再无限等待不存在的设备。
+
+README 的两张截图来自上述 API37 成功任务 `114684013466`、真实 1080×1920 模拟器画面；是测试数据，没有生成或重绘：
+
+- `validation-reader.png` SHA256 `f97c8491ef3b0c129eeae6825434edcae74a5301a7e5a0b3bb9f095983401e95`。
+- `validation-records.png` SHA256 `b5d812770690f4ae91cdd98e1720a02bda1bc8962f6c2bf5749a08fe58ebb25f`。
+
+截图与文档的收尾提交仍需 PR CI；合入后的确切 main commit 也会单独运行两份完整工作流，最终结果和下载入口记录在 PR #15。以上源码验证仍不覆盖 Mac 未同步改动或真实账号人工验收。

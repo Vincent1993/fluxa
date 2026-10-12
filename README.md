@@ -16,6 +16,12 @@
 
 已读与收藏可以同步到 NewsBlur。笔记、高亮、标签、进度、归档和稍后读仅保存在当前设备。
 
+## 阅读界面
+
+<img src="docs/screenshots/validation-reader.png" alt="Fluxa 离线阅读与正文高亮" width="320"> <img src="docs/screenshots/validation-records.png" alt="Fluxa 本地笔记与高亮" width="320">
+
+界面截图使用离线示例文章。
+
 ## 下载与安装
 
 正式签名安装包尚未发布。后续版本会在 [GitHub Releases](https://github.com/Vincent1993/fluxa/releases) 提供 APK、更新说明和校验文件。
