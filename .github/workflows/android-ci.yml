@@ -183,6 +183,7 @@ jobs:
           # Use existing runner access; never change device permissions or security settings.
           test -c /dev/kvm
           getent group kvm
+          sudo -u "$(id -un)" -g kvm -- id
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list --channel=0 \
             > app/build/reports/ci-device/sdk-packages.txt
           grep -F 'system-images;android-36;google_apis;x86_64' \
@@ -192,7 +193,7 @@ jobs:
             "emulator" "system-images;android-36;google_apis;x86_64"
           # Change only the emulator process's effective group, never /dev/kvm permissions.
           sudo -u "$(id -un)" -g kvm -- "$ANDROID_HOME/emulator/emulator" -accel-check \
-            > app/build/reports/ci-device/acceleration.txt 2>&1
+            2>&1 | tee app/build/reports/ci-device/acceleration.txt
           cat "$ANDROID_HOME/emulator/source.properties" \
             "$ANDROID_HOME/system-images/android-36/google_apis/x86_64/source.properties" \
             > app/build/reports/ci-device/emulator-toolchain.txt
