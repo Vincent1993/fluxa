@@ -142,6 +142,12 @@ jobs:
             cat device-reports/crash-buffer.log
             tail -n 100 device-reports/emulator.log 2>/dev/null || true
           fi
+          for name in validation-reader.png validation-records.png; do
+            if "$ANDROID_HOME/platform-tools/adb" shell run-as com.fluxa.app.debug test -f "files/$name"; then
+              "$ANDROID_HOME/platform-tools/adb" exec-out run-as com.fluxa.app.debug cat "files/$name" > "device-reports/$name"
+              printf 'FLUXA_SCREENSHOT_%s_BASE64=%s\n' "$name" "$(base64 -w 0 "device-reports/$name")"
+            fi
+          done
           "$ANDROID_HOME/platform-tools/adb" emu kill || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ always() }}

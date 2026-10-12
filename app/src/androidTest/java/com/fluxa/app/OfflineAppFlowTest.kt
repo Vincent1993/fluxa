@@ -87,6 +87,7 @@ class OfflineAppFlowTest {
                 compose.onNodeWithContentDescription("取消收藏").assertIsDisplayed()
                 compose.onNodeWithContentDescription("取消稍后读").assertIsDisplayed()
                 compose.onNodeWithContentDescription("阅读设置与本地记录").performClick()
+                screenshot("validation-records.png")
                 compose.onNodeWithText("设备上输入的阅读笔记").performScrollTo().assertIsDisplayed()
                 compose.onNodeWithText("即使没有网络").performScrollTo().assertIsDisplayed()
             }
