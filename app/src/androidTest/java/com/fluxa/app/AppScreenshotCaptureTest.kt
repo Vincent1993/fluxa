@@ -447,7 +447,7 @@ class AppScreenshotCaptureTest {
                 shot("22-pending-sync.png", "离线缓存真实已读、收藏操作待同步；未连接账户", text("同步状态"))
                 touch("关闭")
                 // Append after the original 22 captures, leaving their viewports unchanged.
-                sync.article(titles[0], click = true); sync.reader(titles[0])
+                sync.article(titles[0], click = true); sync.reader(titles[0]); sync.body(intro)
                 var originalOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 scenario.onActivity { originalOrientation = it.requestedOrientation }
                 fun awaitOrientation(expected: Int) = sync.await {
@@ -458,9 +458,23 @@ class AppScreenshotCaptureTest {
                 try {
                     scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
                     awaitOrientation(Configuration.ORIENTATION_LANDSCAPE)
-                    sync.reader(titles[0])
-                    shot("23-reader-landscape.png", "真实横屏阅读：插画与图注", reader,
-                        reveal(sync, scenario, secondCaption, .7f))
+                    sync.step("landscape reader body and visible caption") {
+                        sync.reader(titles[0])
+                        // Rotation creates a new native document. Establish its visual
+                        // commit and real accessibility body before Assist sampling,
+                        // just as on initial entry and after a palette change.
+                        sync.body(intro)
+                        shot("23-reader-landscape.png", "真实横屏阅读：插画与图注", reader,
+                            reveal(sync, scenario, secondCaption, .7f))
+                    }
+                } catch (failure: Throwable) {
+                    // The outer flow records again after finally restores portrait.
+                    // Preserve the frame from the failing orientation independently.
+                    runCatching {
+                        File(context.filesDir, "reader-experience-failure.png")
+                            .copyTo(File(output, "failure-landscape.png"), overwrite = true)
+                    }.onFailure { failure.addSuppressed(it) }
+                    throw failure
                 } finally {
                     scenario.onActivity { it.requestedOrientation = originalOrientation }
                     awaitOrientation(Configuration.ORIENTATION_PORTRAIT)
