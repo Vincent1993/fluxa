@@ -495,15 +495,18 @@ class AppScreenshotCaptureTest {
                 it.bounds.width() > 0 && it.bounds.height() > 0 }.minByOrNull { it.bounds.height() }) {
                 "Actual native paragraph missing: $needle"
             }
+            // flatten() already applies the document's native scroll offsets.
+            // These bounds are in the WebView viewport; subtracting scrollY again
+            // makes an actually visible caption look offscreen and causes oscillation.
             val visible = target.bounds.left < width && target.bounds.right > 0 &&
-                target.bounds.top < y + height && target.bounds.bottom > y
+                target.bounds.top < height && target.bounds.bottom > 0
             return JSONObject().put("progress", 100).put("width", width).put("height", height)
                 .put("contentHeight", content).put("scrollY", y).put("javascriptEnabled", false)
                 .put("matchedText", target.text).put("bounds", target.bounds.toShortString())
                 .put("visible", visible).put("visibleBody", JSONArray(entries.filter {
                     !it.text.isNullOrBlank() && it.bounds.width() > 0 && it.bounds.height() > 0 &&
-                        it.bounds.top < y + height && it.bounds.bottom > y
-                }.map { it.text }.distinct())) to (target.bounds.top - y - height * fraction)
+                        it.bounds.top < height && it.bounds.bottom > 0
+                }.map { it.text }.distinct())) to (target.bounds.top - height * fraction)
         }
         var last: JSONObject? = null
         for (attempt in 0..35) {
