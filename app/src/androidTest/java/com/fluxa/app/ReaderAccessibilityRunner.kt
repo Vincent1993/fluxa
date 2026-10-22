@@ -3,6 +3,7 @@ package com.fluxa.app
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.UiAutomation
 import android.content.Context
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
@@ -12,11 +13,22 @@ import androidx.test.runner.AndroidJUnitRunner
  * Keep the acquisition mode consistent even for Espresso/platform helper calls.
  */
 class ReaderAccessibilityRunner : AndroidJUnitRunner() {
+    private var preserveReaderService = false
+    override fun onCreate(arguments: Bundle?) {
+        preserveReaderService = arguments?.getString("readerAccessibilityService") == "true"
+        super.onCreate(arguments)
+    }
     override fun getUiAutomation(): UiAutomation = getUiAutomation(0)
     override fun getUiAutomation(flags: Int): UiAutomation = checkNotNull(
-        super.getUiAutomation(flags or UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES))
+        super.getUiAutomation(if (preserveReaderService)
+            flags or UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES else flags))
 
     override fun onStart() {
+        if (preserveReaderService) verifyReaderService()
+        super.onStart()
+    }
+
+    private fun verifyReaderService() {
         checkNotNull(uiAutomation.serviceInfo)
         val manager = targetContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         val deadline = SystemClock.uptimeMillis() + 10_000
@@ -29,6 +41,5 @@ class ReaderAccessibilityRunner : AndroidJUnitRunner() {
             "Dedicated reader accessibility client must be connected without changing touch gestures"
         }
         Log.i("FluxaTestAccessibility", "Verified real service; UiAutomation preserves services; touch exploration off")
-        super.onStart()
     }
 }

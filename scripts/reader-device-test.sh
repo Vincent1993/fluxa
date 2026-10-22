@@ -50,7 +50,7 @@ run_phase() {
     "${adb_cmd[@]}" shell am instrument -w \
         -e class com.fluxa.app.ReaderExperienceDeviceTest\#phasedReaderExperience -e readerPhase "$phase" \
         -e expectedOrientation "$orientation" -e expectedFontScale "$font" \
-        com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log" || return $?
+        com.fluxa.app.debug.test/com.fluxa.app.ReaderAccessibilityRunner | tee "$reports/$label.log" || return $?
     "${adb_cmd[@]}" logcat -d -v threadtime -s FluxaReaderExperience:V FluxaDeviceFlow:V '*:S' \
         > "$reports/$label-device.log" || return $?
     grep -Eq '^OK \(1 test\)' "$reports/$label.log" || return 1

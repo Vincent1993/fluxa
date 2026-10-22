@@ -28,10 +28,13 @@ new_cert=$(certificate "$new_apk")
     echo "Old and new APK must use the same test certificate."; exit 1;
 }
 printf '%s\n' "$new_cert" > "$reports/test-certificate-sha256.txt"
+export FLUXA_DEVICE_TEST_RUNNER=androidx.test.runner.AndroidJUnitRunner
+export FLUXA_READER_ACCESSIBILITY=false
 run_tests() {
     local label=$1
     shift
     "${adb_cmd[@]}" shell am instrument -w "$@" \
+        -e readerAccessibilityService "$FLUXA_READER_ACCESSIBILITY" \
         "com.fluxa.app.debug.test/${FLUXA_DEVICE_TEST_RUNNER:-androidx.test.runner.AndroidJUnitRunner}" | tee "$reports/$label.log"
     # Android's instrumentation command can exit zero even when JUnit fails.
     if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then
@@ -48,6 +51,9 @@ run_tests upgrade-seed -e class com.fluxa.app.UpgradePreservationTest -e fluxa.u
     grep -E 'versionCode=|versionName=' > "$reports/before-package.txt"
 "${adb_cmd[@]}" install --no-streaming -r "$new_apk"
 "${adb_cmd[@]}" install --no-streaming -r "$new_test"
+export FLUXA_DEVICE_TEST_RUNNER=com.fluxa.app.ReaderAccessibilityRunner
+"${adb_cmd[@]}" shell pm list instrumentation > "$reports/instrumentation.txt"
+grep -F "com.fluxa.app.debug.test/$FLUXA_DEVICE_TEST_RUNNER" "$reports/instrumentation.txt"
 "${adb_cmd[@]}" shell dumpsys package com.fluxa.app.debug |
     grep -E 'versionCode=|versionName=' > "$reports/after-package.txt"
 run_tests upgrade-verify -e class com.fluxa.app.UpgradePreservationTest -e fluxa.upgrade verify
@@ -79,7 +85,7 @@ trap restore_accessibility EXIT
 "${adb_cmd[@]}" shell settings put secure enabled_accessibility_services \
     com.fluxa.app.debug.test/com.fluxa.app.ReaderAccessibilityService
 "${adb_cmd[@]}" shell settings put secure accessibility_enabled 1
-export FLUXA_DEVICE_TEST_RUNNER=com.fluxa.app.ReaderAccessibilityRunner
+export FLUXA_READER_ACCESSIBILITY=true
 "${adb_cmd[@]}" shell settings put system accelerometer_rotation 0
 "${adb_cmd[@]}" shell settings put system user_rotation 0
 "${adb_cmd[@]}" shell settings put system font_scale 1.0

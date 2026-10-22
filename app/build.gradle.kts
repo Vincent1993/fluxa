@@ -53,7 +53,7 @@ android {
         manifestPlaceholders["appLabel"] = "Fluxa"
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.fluxa.app.ReaderAccessibilityRunner"
         vectorDrawables {
             useSupportLibrary = true
         }

@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Additional, opt-in runner. The ordinary AndroidJUnitRunner remains registered. -->
-    <instrumentation
-        android:name="com.fluxa.app.ReaderAccessibilityRunner"
-        android:targetPackage="com.fluxa.app.debug" />
     <application>
         <!-- Test APK only; never merged into the downloadable application APK. -->
         <service
