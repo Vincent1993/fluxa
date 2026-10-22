@@ -510,7 +510,14 @@ internal class DeviceFlowSync(
 
     /** Actual WebView DOM descendants: text or provider-native leaf descriptions, never host labels. */
     fun accessibilityText(visibleOnly: Boolean = false): List<String> {
-        val root = readerUiAutomation().rootInActiveWindow ?: return emptyList()
+        val automation = readerUiAutomation()
+        // A theme reload reuses the WebView host with a new native document. Root
+        // refresh alone can retain old virtual-child IDs in UiAutomation's cache.
+        // Read a fresh provider tree; this changes no app state or service flags.
+        if (Build.VERSION.SDK_INT >= 34) check(automation.clearCache()) {
+            "Could not clear instrumentation accessibility cache"
+        }
+        val root = automation.rootInActiveWindow ?: return emptyList()
         fun collect(node: android.view.accessibility.AccessibilityNodeInfo, webBounds: Rect?): List<String> {
             // UiAutomation can return a cached, incomplete provider tree. Refresh even
             // the root before reading any fields; failed nodes wait for the next sample.

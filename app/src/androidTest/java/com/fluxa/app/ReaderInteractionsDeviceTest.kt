@@ -477,7 +477,7 @@ class ReaderInteractionsDeviceTest {
             boundaryDrag(up = false)
             sync.reader(title(0)); stable(sync, scenario)
             diagnostic("page0-return-storedBefore=$storedBeforeReturn", scenario)
-            assertEquals("Return must restore exact native bottom before any fresh setup", expectedBottom, sample(scenario))
+            assertRestoredDocument("Return must restore exact native bottom before any fresh setup", expectedBottom, sample(scenario))
             assertEquals("Return preserves exact saved position JSON", expectedBottomJson, storedPosition(0))
             assertFalse("Next-page pull must start at native bottom: ${sample(scenario)}", sample(scenario).down)
             boundaryDrag(up = true)
@@ -486,7 +486,7 @@ class ReaderInteractionsDeviceTest {
             drag(up = true); stable(sync, scenario)
             assertEquals(title(1), sample(scenario).title)
             click(sync, "上一篇"); sync.reader(title(0)); stable(sync, scenario)
-            assertEquals("Toolbar return restores exact old native position", expectedBottom, sample(scenario))
+            assertRestoredDocument("Toolbar return restores exact old native position", expectedBottom, sample(scenario))
             assertEquals("Toolbar transition cannot write another article", expectedBottomJson, storedPosition(0))
             security(scenario)
             val saved = sample(scenario)
@@ -580,6 +580,16 @@ class ReaderInteractionsDeviceTest {
     }
     private data class Sample(val y: Int, val height: Int, val down: Boolean, val title: String?, val url: String?,
         val width: Int, val contentHeight: Int, val scale: Float, val up: Boolean)
+    private fun assertRestoredDocument(message: String, expected: Sample, actual: Sample) {
+        // The base URL is a per-load callback lease, not the article's identity.
+        // Returning must create a fresh document while restoring every native metric.
+        val pattern = Regex("https://www\\.newsblur\\.com/fluxa-reader/([0-9]+)/")
+        fun generation(value: String?): Long = checkNotNull(pattern.matchEntire(value.orEmpty())) {
+            "Unexpected native document URL: $value"
+        }.groupValues[1].toLong()
+        assertTrue("$message: fresh document generation", generation(actual.url) > generation(expected.url))
+        assertEquals(message, expected.copy(url = actual.url), actual)
+    }
     private fun views(view: View): Sequence<View> = sequence {
         yield(view)
         if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(views(view.getChildAt(i)))
