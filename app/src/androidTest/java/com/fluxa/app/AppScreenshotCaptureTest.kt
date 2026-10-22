@@ -17,7 +17,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityWindowInfo
 import android.webkit.WebView
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.room.Room
@@ -505,8 +504,9 @@ class AppScreenshotCaptureTest {
                 .put("contentHeight", content).put("scrollY", y).put("javascriptEnabled", false)
                 .put("matchedText", target.text).put("bounds", target.bounds.toShortString())
                 .put("visible", visible).put("visibleBody", JSONArray(entries.filter {
-                    !it.text.isNullOrBlank() && it.bounds.width() > 0 && it.bounds.height() > 0 &&
-                        it.bounds.top < height && it.bounds.bottom > 0
+                    !it.text.isNullOrBlank() && it.bounds.width() > 1 && it.bounds.height() > 1 &&
+                        it.bounds.left >= 0 && it.bounds.right <= width &&
+                        it.bounds.top >= 0 && it.bounds.bottom <= height
                 }.map { it.text }.distinct())) to (target.bounds.top - height * fraction)
         }
         for (attempt in 0..35) {
@@ -531,13 +531,44 @@ class AppScreenshotCaptureTest {
                 return proof.put("accessibleVisibleTextMatched", true)
             }
             check(move && attempt < 35) { "Native text not visibly reached: $proof" }
-            compose.onNodeWithTag("reader-content").performTouchInput {
-                val distance = delta.coerceIn(-height * .5f, height * .5f)
-                val start = if (distance >= 0) height * .8f else height * .2f
-                swipe(Offset(width / 2f, start), Offset(width / 2f, start - distance), 650)
-            }
+            nativeScroll(scenario, delta)
         }
         error("Unreachable")
+    }
+
+    /** Chromium consumes Android wall-clock input; a stationary tail prevents a
+     * synthetic test-clock swipe from flinging past the paragraph being framed. */
+    private fun nativeScroll(scenario: ActivityScenario<MainActivity>, requested: Float) {
+        val viewport = android.graphics.Rect()
+        scenario.onActivity { activity ->
+            val web = views(activity.window.decorView).filterIsInstance<WebView>().single()
+            check(web.title == titles[0] && web.getGlobalVisibleRect(viewport))
+            val origin = IntArray(2).also(web::getLocationOnScreen)
+            viewport.set(origin[0], origin[1], origin[0] + web.width, origin[1] + web.height)
+        }
+        val distance = requested.coerceIn(-viewport.height() * .4f, viewport.height() * .4f)
+        val start = viewport.top + viewport.height() * (if (distance >= 0) .75f else .25f)
+        val x = viewport.exactCenterX()
+        var y = start
+        val down = SystemClock.uptimeMillis()
+        fun inject(action: Int) {
+            val event = android.view.MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0)
+                .apply { source = android.view.InputDevice.SOURCE_TOUCHSCREEN }
+            try { check(instrumentation.uiAutomation.injectInputEvent(event, true)) }
+            finally { event.recycle() }
+        }
+        inject(android.view.MotionEvent.ACTION_DOWN)
+        var released = false
+        try {
+            for (step in 1..30) {
+                SystemClock.sleep(20)
+                y = start - distance * step / 30f
+                inject(android.view.MotionEvent.ACTION_MOVE)
+            }
+            repeat(20) { SystemClock.sleep(20); inject(android.view.MotionEvent.ACTION_MOVE) }
+            inject(android.view.MotionEvent.ACTION_UP)
+            released = true
+        } finally { if (!released) inject(android.view.MotionEvent.ACTION_CANCEL) }
     }
 
     /** Original geometric artwork; two independently painted PNGs, no external assets or text. */

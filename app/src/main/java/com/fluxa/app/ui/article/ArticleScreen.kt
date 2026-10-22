@@ -492,6 +492,12 @@ internal fun ArticleContent(article: Article, settings: ReaderSettings, store: R
             this.settings.allowFileAccess = false
             this.settings.allowContentAccess = false
             this.settings.domStorageEnabled = false
+            // Body scale belongs to the reader's font setting. Chromium pinch zoom
+            // otherwise changes native range/position outside that persisted state.
+            // Embedded images use the separate ZoomImageView and retain pinch/pan.
+            this.settings.setSupportZoom(false)
+            this.settings.builtInZoomControls = false
+            this.settings.displayZoomControls = false
         }
     }, onRelease = { it.disposeReader() }, update = { it.render(controller, html, (fontScale * 100).toInt(), loadingBackground) })
     }
