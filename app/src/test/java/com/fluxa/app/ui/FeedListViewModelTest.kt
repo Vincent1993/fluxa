@@ -19,12 +19,31 @@ import java.time.Instant
 class FeedListViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val store = ViewModelStore()
+    private fun model(repository: ArticleRepository, state: SavedStateHandle = SavedStateHandle()) =
+        FeedListViewModel(repository, state, triageRuntime = TriageRuntime(dispatcher, java.time.Clock.systemUTC())).also { store.put("test", it) }
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
 
+    @Test fun editorEchoIsSynchronousEvenBeforeProjectionRunsAndScopeRestoreCannotEchoOldText() = runTest(dispatcher) {
+        val saved = SavedStateHandle(); val vm = model(CachedRepository(), saved)
+        runCurrent()
+        for (length in 1.."Correction".length) {
+            val value = "Correction".take(length)
+            vm.setQuery(value)
+            assertEquals(value, vm.editorQuery.value) // no scheduler/debounce advancement
+            assertEquals(value, saved.get<String>("query"))
+        }
+        runCurrent(); assertEquals("Correction", vm.editorQuery.value)
+        vm.applyScope(SearchScope(query = "KOTLIN", source = "feed/one"))
+        assertEquals("KOTLIN", vm.editorQuery.value)
+        vm.setQuery(""); assertEquals("", vm.editorQuery.value)
+        advanceTimeBy(300); runCurrent()
+        assertEquals("", vm.state.value.query); assertEquals("feed/one", vm.state.value.source)
+    }
+
     @Test fun refreshFailureKeepsCachedArticlesVisible() = runTest(dispatcher) {
         val repository = CachedRepository()
-        val vm = FeedListViewModel(repository, SavedStateHandle()).also { store.put("test", it) }
+        val vm = model(repository)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
         runCurrent()
         assertEquals(2, vm.state.value.articles.size)
@@ -33,11 +52,12 @@ class FeedListViewModelTest {
     }
 
     @Test fun queryUnreadStarredAndSourceFiltersCombine() = runTest(dispatcher) {
-        val vm = FeedListViewModel(CachedRepository(), SavedStateHandle()).also { store.put("test", it) }
+        val vm = model(CachedRepository())
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
         runCurrent()
         vm.setFilter(ArticleFilter.Unread)
         vm.setQuery("KOTLIN")
+        advanceTimeBy(251)
         runCurrent()
         assertEquals("one", vm.state.value.articles.single().id)
         vm.setFilter(ArticleFilter.Starred)
@@ -49,28 +69,67 @@ class FeedListViewModelTest {
         assertEquals("two", vm.state.value.articles.single().id)
     }
 
+    @Test fun unreadProjectionStaysCurrentWithoutUiSubscriberThenReconnects() = runTest(dispatcher) {
+        val repository = CachedRepository()
+        val savedState = SavedStateHandle(mapOf(
+            "query" to "KOTLIN", "filter" to "Unread", "source" to "feed/one"
+        ))
+        val survivor = repository.articles.value.first().copy(id = "survivor")
+        repository.articles.value = repository.articles.value + survivor
+        val vm = model(repository, savedState)
+        val ui = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+        advanceTimeBy(251)
+        runCurrent()
+        assertEquals(listOf("one", "survivor"), vm.state.value.articles.map { it.id })
+
+        ui.cancel()
+        runCurrent()
+        advanceTimeBy(6_000) // Exceed the former WhileSubscribed stop timeout during reading.
+        runCurrent()
+        repository.articles.value = repository.articles.value.map {
+            if (it.id == "one") it.copy(isRead = true) else it
+        }
+        runCurrent()
+        // Assert before reconnect: Compose must never receive the consumed anchor as its first frame.
+        assertEquals(listOf("survivor"), vm.state.value.articles.map { it.id })
+        assertEquals("KOTLIN", vm.state.value.query)
+        assertEquals(ArticleFilter.Unread, vm.state.value.filter)
+        assertEquals("feed/one", vm.state.value.source)
+        assertEquals("KOTLIN", savedState.get<String>("query"))
+        assertEquals("Unread", savedState.get<String>("filter"))
+        assertEquals("feed/one", savedState.get<String>("source"))
+
+        val reconnected = mutableListOf<FeedListState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { reconnected += it } }
+        runCurrent()
+        assertEquals(listOf("survivor"), reconnected.first().articles.map { it.id })
+        assertEquals(vm.state.value, reconnected.last())
+    }
+
     @Test fun concurrentRefreshClicksProduceOnlyOneRequest() = runTest(dispatcher) {
         val repository = CachedRepository()
-        val vm = FeedListViewModel(repository, SavedStateHandle()).also { store.put("test", it) }
+        val vm = model(repository)
         repeat(5) { vm.refresh() }
         runCurrent()
         assertEquals(1, repository.refreshCalls)
     }
 
-    @Test fun advancedFiltersRestoreAndRejectInvalidChangesAtomically() = runTest(dispatcher) {
-        val saved = SavedStateHandle(mapOf("tag" to "Tech", "dateFrom" to "1970-01-01", "dateTo" to "1970-01-02"))
-        val vm = FeedListViewModel(CachedRepository(), saved).also { store.put("advanced", it) }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+    @Test fun newerQueryCancelsDebouncedResultWithoutNetworkOrSourceBroadening() = runTest(dispatcher) {
+        val repository = CachedRepository()
+        val vm = model(repository)
         runCurrent()
-        assertEquals("Tech", vm.state.value.tag)
-        assertEquals("1970-01-01", vm.state.value.dateFrom)
-        assertFalse(vm.setAdvancedFilters("Other", "2026-10-12", "2026-10-11"))
+        val calls = repository.refreshCalls
+        vm.setQuery("KOTLIN")
+        advanceTimeBy(100)
+        vm.setQuery("News")
+        advanceTimeBy(251); runCurrent()
+        assertEquals(listOf("two"), vm.state.value.articles.map { it.id })
+        assertEquals(calls, repository.refreshCalls)
+        vm.applyScope(SearchScope(query = "News", source = "missing"))
         runCurrent()
-        assertEquals("Tech", vm.state.value.tag)
-        assertEquals("1970-01-01", saved.get<String>("dateFrom"))
-        assertTrue(vm.setAdvancedFilters("", "", ""))
-        runCurrent()
-        assertEquals(2, vm.state.value.articles.size)
+        assertTrue(vm.state.value.articles.isEmpty())
+        assertEquals("missing", vm.state.value.source)
+        assertEquals(calls, repository.refreshCalls)
     }
 
     private class CachedRepository : ArticleRepository {

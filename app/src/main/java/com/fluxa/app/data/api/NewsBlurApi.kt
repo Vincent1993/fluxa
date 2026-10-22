@@ -18,6 +18,8 @@ interface NewsBlurApi {
     suspend fun addFeed(@Field("url") url: String): NewsBlurResult
     @FormUrlEncoded @POST("reader/mark_story_hashes_as_read")
     suspend fun markRead(@Field("story_hash") hashes: List<String>): NewsBlurResult
+    @FormUrlEncoded @POST("reader/mark_story_hash_as_unread")
+    suspend fun markUnread(@Field("story_hash") hash: String): NewsBlurResult
     @FormUrlEncoded @POST("reader/mark_story_hash_as_starred")
     suspend fun star(@Field("story_hash") hash: String): NewsBlurResult
     @FormUrlEncoded @POST("reader/mark_story_hash_as_unstarred")

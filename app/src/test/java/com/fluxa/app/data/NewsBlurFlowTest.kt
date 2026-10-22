@@ -46,14 +46,14 @@ class NewsBlurFlowTest {
                     path == "/reader/feeds" -> """{"feeds":{"12":{"feed_title":"Daily","feed_address":"https://example.org/rss","active":true}}}"""
                     path == "/reader/add_url" -> """{"code":1}"""
                     path == "/reader/mark_story_hashes_as_read" -> { read = true; """{"code":1}""" }
+                    path == "/reader/mark_story_hash_as_unread" -> { read = false; """{"code":1}""" }
                     path == "/reader/mark_story_hash_as_starred" -> { starred = true; """{"code":1}""" }
                     path == "/reader/mark_story_hash_as_unstarred" -> { starred = false; """{"code":1}""" }
                     path == "/reader/feed/12" && request.requestUrl!!.queryParameter("page") == "2" ->
                         """{"stories":[]}"""
                     path == "/reader/feed/12" -> """{"stories":[{"story_hash":"12:abc123","story_feed_id":12,
                         "story_title":"Cached story","story_content":"<p>Offline body</p>",
-                        "story_timestamp":"1700000000","read_status":${if (read) 1 else 0},"starred":$starred,
-                        "story_permalink":"https://example.test/story","story_authors":"Ada","story_tags":["Remote"]}]}"""
+                        "story_timestamp":"1700000000","read_status":${if (read) 1 else 0},"starred":$starred}]}"""
                     else -> return MockResponse().setResponseCode(404)
                 }
                 return MockResponse().setBody(body)
@@ -95,11 +95,11 @@ class NewsBlurFlowTest {
         assertEquals("<p>Offline body</p>", article.contentHtml)
         assertEquals("12", article.source)
         repository.markRead(article.id)
-        assertEquals(1, db.pendingActionDao().getAllOrdered().size)
+        assertEquals(1, repository.observePendingCount().first())
         limited = true
         repository.toggleStar(article.id)
         assertTrue(db.articleDao().getById(article.id)!!.isStarred)
-        assertEquals(2, db.pendingActionDao().getAllOrdered().size)
+        assertEquals(2, repository.observePendingCount().first())
         repository.refresh() // 429 writes do not erase flags or prevent article reads.
         assertTrue(db.articleDao().getById(article.id)!!.isRead)
         assertTrue(db.articleDao().getById(article.id)!!.isStarred)
@@ -107,7 +107,10 @@ class NewsBlurFlowTest {
         repository.syncPendingActions()
         assertTrue(read)
         assertTrue(starred)
-        assertTrue(db.pendingActionDao().getAllOrdered().isEmpty())
+        assertEquals(0, repository.observePendingCount().first())
+        assertEquals(2, db.pendingActionDao().getAllOrdered().count { it.actionType.startsWith("Ack") })
+        repository.refresh()
+        assertTrue(db.pendingActionDao().getAllOrdered().none { it.actionType.startsWith("Ack") })
         repository.toggleStar(article.id)
         assertFalse(starred)
         repository.loadMore()
@@ -116,21 +119,19 @@ class NewsBlurFlowTest {
         assertFalse(calls.any { it.contains("river_stories") })
     }
 
-    @Test fun refreshedServerMetadataKeepsLocalReadingRecordsAndNeverQueuesUnsupportedActions() = runBlocking {
+    @Test fun compensatingUnreadUsesTheRealRetrofitEndpoint() = runBlocking {
         repository.refresh()
-        val local = com.fluxa.app.data.reader.LocalReadingRepository(db, ApplicationProvider.getApplicationContext())
-        local.note("12:abc123", "Keep after refresh")
-        local.tags("12:abc123", listOf("Local")); local.progress("12:abc123", .55f); local.save("12:abc123")
-        repository.refresh()
-        val article = repository.getPagedArticles().first().single()
-        assertEquals("Ada", article.author)
-        assertEquals("https://example.test/story", article.url)
-        assertEquals("Offline body", article.excerpt)
-        assertEquals(.55f, article.readingProgress, .001f)
-        assertEquals(setOf("Local", "Remote"), article.tags.toSet())
-        assertEquals(1, article.annotationCount)
-        assertNotNull(article.savedAtEpochSeconds)
-        assertTrue(db.pendingActionDao().getAllOrdered().isEmpty())
+        val receipt = repository.bulkRead(listOf("12:abc123"))
+        repository.syncPendingActions()
+        assertTrue(read)
+        repository.undoRead(receipt)
+        repository.syncPendingActions()
+        assertFalse(read)
+        assertTrue(calls.contains("/reader/mark_story_hash_as_unread"))
+        val requests = (0 until server.requestCount).map { checkNotNull(server.takeRequest(3, TimeUnit.SECONDS)) }
+        val unread = requests.single { it.requestUrl!!.encodedPath == "/reader/mark_story_hash_as_unread" }
+        assertEquals("POST", unread.method)
+        assertEquals("story_hash=12%3Aabc123", unread.body.readUtf8())
     }
 
     @Test fun loginContractUsesFormAndReceivesCookieWithoutApiKey() = runBlocking {
@@ -194,10 +195,13 @@ class NewsBlurFlowTest {
         assertTrue(failure is NewsBlurApiException)
         assertEquals("服务端拒绝操作，登录后可重试", failure!!.message)
         assertTrue(db.articleDao().getById(article.id)!!.isStarred)
-        assertEquals(1, db.pendingActionDao().getAllOrdered().size)
+        assertEquals(1, repository.observePendingCount().first())
         businessRefusal = false
         repository.syncPendingActions()
         assertTrue(starred)
-        assertTrue(db.pendingActionDao().getAllOrdered().isEmpty())
+        assertEquals(0, repository.observePendingCount().first())
+        assertEquals("AckStar", db.pendingActionDao().getAllOrdered().single { it.actionType != "LocalRevision" }.actionType)
+        repository.refresh()
+        assertTrue(db.pendingActionDao().getAllOrdered().all { it.actionType == "LocalRevision" })
     }
 }

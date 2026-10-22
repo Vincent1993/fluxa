@@ -42,6 +42,7 @@ jobs:
           python3 scripts/test_native_alignment.py
           python3 scripts/test_prepare_key.py
           python3 scripts/test_test_release.py
+          python3 scripts/test_device_page_size.py
           python3 scripts/release.py preflight --channel preview --tag "$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import release; v=release.read_version(open("version.properties").read()); print(release.expected(v, "preview")["tag"])')"
       - name: Check new PR branch naming
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number > 6 && github.actor != 'dependabot[bot]' }}
@@ -251,7 +252,10 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
           "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
           "$ANDROID_HOME/platform-tools/adb" shell settings put global animator_duration_scale 0
-          ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+          ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace \
+            -Pandroid.testInstrumentationRunnerArguments.class="$(paste -sd, scripts/device-ci-classes.txt)" \
+            -Pandroid.testInstrumentationRunnerArguments.expectedOrientation=portrait \
+            -Pandroid.testInstrumentationRunnerArguments.expectedFontScale=1.0
       - name: Summarize actual device test results
         if: ${{ always() }}
         run: python3 scripts/ci-test-summary.py app/build/outputs/androidTest-results --output app/build/reports/ci-device/test-summary.json

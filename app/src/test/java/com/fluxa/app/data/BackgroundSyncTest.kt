@@ -47,7 +47,8 @@ class BackgroundSyncTest {
 
     private fun worker(attempt: Int = 0) = TestListenableWorkerBuilder<NewsBlurSyncWorker>(context)
         .setRunAttemptCount(attempt)
-        .setWorkerFactory(SyncWorkerFactory(Lazy { repository }, Lazy { auth }, settings)).build()
+        .setWorkerFactory(SyncWorkerFactory(Lazy { repository }, Lazy { auth }, settings,
+            Lazy { error("NewsBlur worker must not initialize local RSS") }, com.fluxa.app.data.directrss.LocalOfflineSettings(context))).build()
 
     @Test fun disabledAndLoggedOutSessionsNeverRefresh() = runBlocking {
         assertEquals(ListenableWorker.Result.success(), worker().doWork())

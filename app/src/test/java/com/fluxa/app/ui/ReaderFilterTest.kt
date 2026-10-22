@@ -25,4 +25,15 @@ class ReaderFilterTest {
         assertFalse(matchesReaderFilter(article.copy(savedAtEpochSeconds = null), FeedListState(filter = ArticleFilter.Saved)))
         assertTrue(matchesReaderFilter(article, FeedListState(filter = ArticleFilter.Annotated)))
     }
+    @Test fun mergedTriageKeepsPublishedArchivesAndLocalTagsReachable() {
+        val archived = article.copy(archivedAtEpochSeconds = 10)
+        val engine = TriageEngine()
+        assertTrue(engine.apply(listOf(archived), SearchScope(), TriageConfig()).articles.isEmpty())
+        assertEquals(listOf(archived), engine.apply(listOf(archived),
+            SearchScope(filter = ArticleFilter.Archived, tag = "tech"), TriageConfig()).articles)
+        assertTrue(engine.apply(listOf(archived), SearchScope(filter = ArticleFilter.Archived, tag = "other"),
+            TriageConfig()).articles.isEmpty())
+        assertEquals(listOf(article), engine.apply(listOf(article),
+            SearchScope(filter = ArticleFilter.Annotated, query = "ada"), TriageConfig()).articles)
+    }
 }

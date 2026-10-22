@@ -11,6 +11,7 @@ import javax.inject.Inject
 class FluxaApplication : Application(), Configuration.Provider {
     @Inject lateinit var syncWorkerFactory: SyncWorkerFactory
     @Inject lateinit var syncScheduler: BackgroundSyncScheduler
+    @Inject lateinit var directSyncScheduler: com.fluxa.app.data.sync.DirectRssSyncScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(syncWorkerFactory).build()
@@ -18,5 +19,6 @@ class FluxaApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         syncScheduler.restore()
+        directSyncScheduler.restore()
     }
 }

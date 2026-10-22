@@ -3,6 +3,7 @@ name: Android test prerelease
 on:
   push:
     branches: [feature/cloud-ui-validation]
+    tags: [test-candidate-*]
   workflow_dispatch:
     inputs:
       publish_debug_prerelease:
@@ -31,10 +32,12 @@ jobs:
     needs: [verify, devices]
     if: >-
       github.repository == 'Vincent1993/fluxa' &&
-      github.ref == 'refs/heads/feature/cloud-ui-validation' &&
-      github.event_name == 'workflow_dispatch' &&
-      inputs.publish_debug_prerelease == true &&
-      inputs.verified_source_sha == github.sha
+      ((github.ref == 'refs/heads/feature/cloud-ui-validation' &&
+        github.event_name == 'workflow_dispatch' &&
+        inputs.publish_debug_prerelease == true &&
+        inputs.verified_source_sha == github.sha) ||
+       (github.event_name == 'push' &&
+        github.ref == format('refs/tags/test-candidate-{0}', github.sha)))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -46,6 +49,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
@@ -59,6 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$FLUXA_BUILD_COMMIT"
+          git merge-base --is-ancestor 30250d9844d70b56d9cbdd8c4133a38a6e75049e HEAD
+          git merge-base --is-ancestor 8b4c1ef8b960a977e9838f9e460d64e7171d1207 HEAD
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'build-tools;36.0.0'
           python3 scripts/prepare-test-release.py candidate dist
       - name: Publish a new prerelease without replacing existing assets

@@ -34,6 +34,8 @@ class ReaderFeaturesTest {
         local.tags("one", listOf("Tech", "tech", " 阅读 "))
         local.progress("one", .67f); local.open("one"); local.save("one")
         val before = db.observeReaderArticles().first().single()
+        assertEquals(before.url, before.originalUrl); assertTrue(before.readLater)
+        assertEquals(before.excerpt, before.summary)
         assertEquals("Author", before.author); assertEquals("https://example.test/story", before.url)
         assertEquals(4, before.wordCount); assertEquals(listOf("Tech", "阅读"), before.tags.sorted())
         assertEquals(2, before.annotationCount); assertEquals(.67f, before.readingProgress, .001f)

@@ -14,11 +14,15 @@ import javax.inject.Singleton
 class SyncWorkerFactory @Inject constructor(
     private val repository: Lazy<ArticleRepository>,
     private val auth: Lazy<AuthRepository>,
-    private val settings: BackgroundSyncSettings
+    private val settings: BackgroundSyncSettings,
+    private val direct: Lazy<com.fluxa.app.data.directrss.DirectRssRepository>,
+    private val offline: com.fluxa.app.data.directrss.LocalOfflineSettings
 ) : WorkerFactory() {
     override fun createWorker(appContext: Context, workerClassName: String,
         workerParameters: WorkerParameters): ListenableWorker? =
         if (workerClassName == NewsBlurSyncWorker::class.java.name)
             NewsBlurSyncWorker(appContext, workerParameters, repository.get(), auth.get(), settings)
+        else if (workerClassName == DirectRssSyncWorker::class.java.name)
+            DirectRssSyncWorker(appContext, workerParameters, direct.get(), offline)
         else null
 }

@@ -2,7 +2,7 @@ package com.fluxa.app.di
 
 import com.fluxa.app.data.repository.ArticleRepository
 import com.fluxa.app.data.repository.AuthRepository
-import com.fluxa.app.data.repository.NewsBlurArticleRepository
+import com.fluxa.app.data.repository.CompositeArticleRepository
 import com.fluxa.app.data.repository.NewsBlurAuthRepository
 import dagger.Binds
 import dagger.Module
@@ -15,7 +15,7 @@ import javax.inject.Singleton
 abstract class RepositoryModule {
     @Binds
     @Singleton
-    abstract fun bindArticleRepository(impl: NewsBlurArticleRepository): ArticleRepository
+    abstract fun bindArticleRepository(impl: CompositeArticleRepository): ArticleRepository
 
     @Binds
     @Singleton

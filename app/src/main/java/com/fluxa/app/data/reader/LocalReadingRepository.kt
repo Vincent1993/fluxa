@@ -111,9 +111,14 @@ fun FluxaDatabase.observeReaderArticles() = combine(articleDao().observeAll(), r
         val m = states[item.id] ?: ReaderMetadata(item.id)
         val names = (byArticle[item.id].orEmpty().mapNotNull { tagNames[it.tagId] } +
             item.tags.split(',').filter { it.isNotBlank() && !it.contains("/state/") }.map { it.substringAfter("/label/", it) }).distinct()
-        Article(item.id, item.title, item.feedName, Instant.ofEpochSecond(item.publishedAtEpochSeconds), item.isRead,
-            item.isStarred, item.contentHtml, item.source, m.url, m.author, m.excerpt, m.wordCount, m.readingProgress,
-            m.archivedAtEpochSeconds, m.savedAtEpochSeconds, m.lastOpenedAtEpochSeconds, names, counts[item.id] ?: 0)
+        Article(id = item.id, title = item.title, feedName = item.feedName,
+            publishedAt = Instant.ofEpochSecond(item.publishedAtEpochSeconds), isRead = item.isRead,
+            isStarred = item.isStarred, contentHtml = item.contentHtml, source = item.source,
+            originalUrl = m.url, author = m.author, summary = m.excerpt,
+            readMinutes = (m.wordCount + 219) / 220, readLater = m.savedAtEpochSeconds != null,
+            url = m.url, excerpt = m.excerpt, wordCount = m.wordCount, readingProgress = m.readingProgress,
+            archivedAtEpochSeconds = m.archivedAtEpochSeconds, savedAtEpochSeconds = m.savedAtEpochSeconds,
+            lastOpenedAtEpochSeconds = m.lastOpenedAtEpochSeconds, tags = names, annotationCount = counts[item.id] ?: 0)
     }
 }
 

@@ -21,6 +21,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+    /** Manifest HTTP opt-in is exclusively for anonymous public content. Account
+     * transports have no cleartext connection spec, including redirected requests. */
+    internal fun accountClient() = OkHttpClient.Builder()
+        .connectionSpecs(listOf(okhttp3.ConnectionSpec.MODERN_TLS, okhttp3.ConnectionSpec.COMPATIBLE_TLS))
+        .followRedirects(false).followSslRedirects(false)
+
     @Provides
     @Singleton
     fun provideMoshi(): Moshi = Moshi.Builder().add(NewsBlurJsonAdapter()).addLast(KotlinJsonAdapterFactory()).build()
@@ -29,8 +35,7 @@ object NetworkModule {
     @Singleton
     fun provideNewsBlurApi(session: NewsBlurSessionInterceptor, moshi: Moshi): NewsBlurApi =
         Retrofit.Builder().baseUrl("https://www.newsblur.com/")
-            .client(OkHttpClient.Builder().addInterceptor(session)
-                .followRedirects(false).followSslRedirects(false).build())
+            .client(accountClient().addInterceptor(session).build())
             .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
             .create(NewsBlurApi::class.java)
 
@@ -40,7 +45,7 @@ object NetworkModule {
         val logger = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
-        return OkHttpClient.Builder()
+        return accountClient()
             .addInterceptor(authHeaderInterceptor)
             .addInterceptor(logger)
             .build()

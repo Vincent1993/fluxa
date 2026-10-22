@@ -51,7 +51,12 @@ run_tests upgrade-seed -e class com.fluxa.app.UpgradePreservationTest -e fluxa.u
 "${adb_cmd[@]}" shell dumpsys package com.fluxa.app.debug |
     grep -E 'versionCode=|versionName=' > "$reports/after-package.txt"
 run_tests upgrade-verify -e class com.fluxa.app.UpgradePreservationTest -e fluxa.upgrade verify
-run_tests complete-device-suite
+"${adb_cmd[@]}" shell settings put system accelerometer_rotation 0
+"${adb_cmd[@]}" shell settings put system user_rotation 0
+"${adb_cmd[@]}" shell settings put system font_scale 1.0
+run_tests complete-device-suite -e class "$(paste -sd, scripts/device-ci-classes.txt)" \
+    -e expectedOrientation portrait -e expectedFontScale 1.0
+bash scripts/device-ci-capture.sh "$reports"
 for name in validation-login.png validation-reader.png validation-cache.png; do
     # Screenshots are optional diagnostics; JUnit and upgrade assertions above are mandatory.
     if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/$name"; then

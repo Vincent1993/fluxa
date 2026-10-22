@@ -70,7 +70,7 @@ def main():
                     'Device suite did not pass: ' + api + '/' + name)
             result[name] = int(passed[0])
         device_results[api] = result
-        for image in sorted(reports.glob('validation-*.png')):
+        for image in sorted(reports.rglob('*.png')):
             require(image.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'), 'Invalid screenshot: ' + str(image))
             screenshots.append(str(image.relative_to(candidate)))
 
@@ -82,6 +82,7 @@ def main():
                     signing_certificate_sha256=fingerprint[1],
                     cross_build_upgrade_guaranteed=False, unit_tests=unit_results,
                     devices=device_results, screenshots=screenshots,
+                    device_scope="scripts/device-ci-classes.txt plus explicit screenshot and reader-interaction phases",
                     actions_url='https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + run_id)
     (output / 'test-release-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
     with zipfile.ZipFile(output / 'validation-evidence.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -101,9 +102,9 @@ def main():
 不同构建的签名可能不同，不能保证覆盖升级；若系统提示签名冲突，请保留现有安装与数据，不要为安装本测试包直接卸载旧版本。
 
 本次验证：Debug / Preview / Stable 单测分别通过 {unit_results['debug']['tests']} / {unit_results['preview']['tests']} / {unit_results['stable']['tests']} 项；三个渠道构建和 lint 成功。
-API 36 与 API 37（16 KB 页）设备套件分别通过 {device_results['36']['complete-device-suite']} / {device_results['37.0']['complete-device-suite']} 项，并通过使用同一临时测试证书的覆盖升级检查。
+API 36 与 API 37（16 KB 页）常规设备套件分别通过 {device_results['36']['complete-device-suite']} / {device_results['37.0']['complete-device-suite']} 项，并通过使用同一临时测试证书的覆盖升级检查。
 覆盖升级检查使用 CI 内重新构建的基线与候选包，不能证明不同 CI 构建间的签名兼容。
-设备测试使用离线夹具，未代替真实 NewsBlur / GitHub 用户账号联调、真机后台调度或人工 TalkBack 验收。
+常规设备类清单见 `scripts/device-ci-classes.txt`；专用手工探针不包含在该计数中。设备测试使用离线夹具，未代替真实 NewsBlur / GitHub 用户账号联调、真机后台调度或人工 TalkBack 验收。
 
 `validation-evidence.zip` 包含测试报告、设备日志和实际产生的 {len(screenshots)} 张应用截图；截图来自 Android 模拟器。
 `SHA256SUMS` 提供 APK 和证据包的 SHA-256，可用 `sha256sum -c SHA256SUMS` 校验。

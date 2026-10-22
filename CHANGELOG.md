@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- 整合本地 RSS、GitHub Library、保存筛选与新阅读器，以及本轮首页/阅读页界面改动。
+- 保留已发布 NewsBlur 数据库 v4、旧笔记高亮、标签、归档和资料导入。
+- 新增有明确源码门槛的 Debug 测试预发布，关联实际 CI、截图及 SHA-256；等待本轮验证。
+
+## [Unreleased]
+
 - Stable 发布需单独验收、递增 VERSION_CODE、补充版本条目并配置正式签名。
 
 ## [0.3.0-preview.1] - 2026-10-12
