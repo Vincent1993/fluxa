@@ -1,0 +1,69 @@
+name: Android test prerelease
+
+on:
+  push:
+    branches: [feature/cloud-ui-validation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fluxa-test-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/android-ci.yml
+  devices:
+    uses: ./.github/workflows/android-device-ci.yml
+  publish:
+    name: Publish verified Debug test APK
+    needs: [verify, devices]
+    if: github.repository == 'Vincent1993/fluxa' && github.ref == 'refs/heads/feature/cloud-ui-validation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      FLUXA_BUILD_COMMIT: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: fluxa-*
+          path: candidate
+      - name: Verify installable APK, exact source, signature and reports
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FLUXA_BUILD_COMMIT"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'build-tools;36.0.0'
+          python3 scripts/prepare-test-release.py candidate dist
+      - name: Publish a new prerelease without replacing existing assets
+        run: |
+          set -euo pipefail
+          tag=$(python3 -c 'import json; print(json.load(open("dist/test-release-metadata.json"))["tag"])')
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists; preserve it and inspect manually.' >&2
+            exit 1
+          fi
+          # A unique test tag points to this exact branch commit; stable channels are untouched.
+          gh release create "$tag" dist/*.apk dist/SHA256SUMS dist/test-release-metadata.json \
+            dist/validation-evidence.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Fluxa Debug test ${GITHUB_SHA:0:7}" --notes-file dist/release-notes.md \
+            --prerelease --draft --latest=false
+          mkdir downloaded
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir downloaded \
+            --pattern '*.apk' --pattern SHA256SUMS --pattern validation-evidence.zip
+          (cd downloaded && sha256sum -c SHA256SUMS)
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,isPrerelease \
+            >> "$GITHUB_STEP_SUMMARY"
