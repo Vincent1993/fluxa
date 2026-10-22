@@ -4,6 +4,15 @@ on:
   push:
     branches: [feature/cloud-ui-validation]
   workflow_dispatch:
+    inputs:
+      publish_debug_prerelease:
+        description: Publish the fully verified Debug APK as a public test prerelease
+        type: boolean
+        default: false
+      verified_source_sha:
+        description: Exact full source SHA after complete snapshot integration and review
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -20,7 +29,12 @@ jobs:
   publish:
     name: Publish verified Debug test APK
     needs: [verify, devices]
-    if: github.repository == 'Vincent1993/fluxa' && github.ref == 'refs/heads/feature/cloud-ui-validation'
+    if: >-
+      github.repository == 'Vincent1993/fluxa' &&
+      github.ref == 'refs/heads/feature/cloud-ui-validation' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.publish_debug_prerelease == true &&
+      inputs.verified_source_sha == github.sha
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
