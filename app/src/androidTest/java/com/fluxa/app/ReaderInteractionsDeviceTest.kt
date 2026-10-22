@@ -406,16 +406,19 @@ class ReaderInteractionsDeviceTest {
             }
             stable(sync, scenario)
             assertEquals(title(0), sample(scenario).title)
+            assertEquals("Canceled body input must retain scale", expectedBottom.scale, sample(scenario).scale, 0f)
             compose.onNodeWithTag("reader-content").performTouchInput {
                 swipe(Offset(1f, height * .7f), Offset(1f, height * .3f), 400)
             }
             stable(sync, scenario)
             assertEquals(title(0), sample(scenario).title)
+            assertEquals("Edge body input must retain scale", expectedBottom.scale, sample(scenario).scale, 0f)
             compose.onNodeWithTag("reader-content").performTouchInput {
                 swipe(Offset(width * .25f, height * .65f), Offset(width * .75f, height * .55f), 400)
             }
             stable(sync, scenario)
             assertEquals(title(0), sample(scenario).title)
+            assertEquals("Horizontal body input must retain scale", expectedBottom.scale, sample(scenario).scale, 0f)
             compose.onNodeWithTag("reader-content").performTouchInput {
                 down(0, Offset(width * .4f, height * .7f))
                 down(1, Offset(width * .6f, height * .7f))
@@ -425,9 +428,9 @@ class ReaderInteractionsDeviceTest {
             }
             stable(sync, scenario)
             assertEquals(title(0), sample(scenario).title)
-            // The pagination recognizer rejects multi-pointer streams, while the
-            // production listener intentionally leaves unclaimed input to Chromium.
-            // Its native pan may move away from bottom. Re-establish the boundary
+            assertEquals("Multi-pointer body input must retain scale", expectedBottom.scale, sample(scenario).scale, 0f)
+            // Rejected multi-pointer input must not change body scale. A preceding
+            // native pan may move away from bottom. Re-establish the boundary
             // with actual gestures BEFORE testing cancellation of an already claimed
             // pull. Never scroll programmatically or repair position after navigation.
             for (attempt in 0..8) {

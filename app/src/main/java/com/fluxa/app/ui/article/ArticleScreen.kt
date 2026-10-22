@@ -786,7 +786,13 @@ internal class ReaderPage(private val id: String, private val store: ReaderPrefe
                 }
                 MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> {
                     multiPointerStream = true
-                    cancelGesture(cancelNative = false)
+                    // Body text uses the persisted font setting, not transient pinch
+                    // scale. Cancel Chromium's single-pointer stream before it sees
+                    // the second pointer, then drain through the final UP. Merely
+                    // rejecting pagination leaves the native zoom stream alive.
+                    // Android edge streams and the separate image viewer keep their
+                    // own input handling.
+                    cancelGesture()
                     return@setOnTouchListener draining
                 }
                 MotionEvent.ACTION_CANCEL -> {
