@@ -186,6 +186,9 @@ class AppScreenshotCaptureTest {
             val sync = DeviceFlowSync(compose, scenario)
             fun text(value: String) = compose.onNodeWithText(value)
             fun settle(node: SemanticsNodeInteraction) {
+                // Sheets/dialogs publish their controls after the click's frame.
+                // Wait for the actual accessible control before inspecting its window.
+                sync.await { sync.displayed(node) }
                 val target = node.fetchSemanticsNode()
                 if (generateSequence(target) { it.parent }.none { isPopup().matches(it) }) {
                     sync.settled(node)
@@ -360,7 +363,7 @@ class AppScreenshotCaptureTest {
                 shot("06-search-empty.png", "真实搜索空结果", text("没有匹配的文章"))
                 query(""); icon("搜索")
                 icon("选择订阅")
-                shot("07-sources.png", "真实订阅来源选择器", text("全部订阅"))
+                shot("07-sources.png", "真实订阅来源选择器", compose.onNodeWithContentDescription("全部订阅"))
                 touch("城市漫游"); sync.list()
                 sync.await { sync.absent(hasText(titles[1])) && !sync.absent(hasText(titles[0])) }
                 shot("08-source-list.png", "城市漫游来源筛选", text(titles[0]))

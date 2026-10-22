@@ -139,12 +139,13 @@ jobs:
         if: ${{ always() }}
         run: |
           mkdir -p device-reports
+          timeout 15s "$ANDROID_HOME/platform-tools/adb" logcat -d > device-reports/logcat.log 2>&1 || true
           timeout 15s "$ANDROID_HOME/platform-tools/adb" logcat -d -b crash > device-reports/crash-buffer.log 2>&1 || true
           if [ "${{ job.status }}" != success ]; then
             cat device-reports/crash-buffer.log
             tail -n 100 device-reports/emulator.log 2>/dev/null || true
           fi
-          for name in validation-reader.png validation-records.png; do
+          for name in validation-reader.png validation-records.png reader-experience-failure.png; do
             if timeout 10s "$ANDROID_HOME/platform-tools/adb" shell run-as com.fluxa.app.debug test -f "files/$name"; then
               if timeout 15s "$ANDROID_HOME/platform-tools/adb" exec-out run-as com.fluxa.app.debug cat "files/$name" > "device-reports/$name"; then
                 printf 'FLUXA_SCREENSHOT_%s_BASE64=%s\n' "$name" "$(base64 -w 0 "device-reports/$name")"

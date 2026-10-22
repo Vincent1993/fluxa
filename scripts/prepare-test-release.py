@@ -63,7 +63,12 @@ def main():
         info = dict(line.split('=', 1) for line in (reports / 'device.txt').read_text().splitlines())
         require(info == {'API': api.split('.')[0], 'PAGE_SIZE': str(page_size)}, 'Device identity mismatch')
         result = {}
-        for name in ('upgrade-seed', 'upgrade-verify', 'complete-device-suite'):
+        suites = ['upgrade-seed', 'upgrade-verify', 'complete-device-suite',
+                  'screenshot-capture', 'screenshot-cleanup', 'reader-interactions-seed',
+                  'reader-interactions-verify', 'reader-interactions-cleanup']
+        if api == '36':
+            suites += ['reader-media', 'reader-triage']
+        for name in suites:
             text = (reports / (name + '.log')).read_text()
             passed = re.findall(r'^OK \(([1-9][0-9]*) tests?\)', text, re.MULTILINE)
             require(len(passed) == 1 and not re.search(r'^INSTRUMENTATION_STATUS_CODE: -(3|4)', text, re.MULTILINE),
@@ -82,7 +87,7 @@ def main():
                     signing_certificate_sha256=fingerprint[1],
                     cross_build_upgrade_guaranteed=False, unit_tests=unit_results,
                     devices=device_results, screenshots=screenshots,
-                    device_scope="scripts/device-ci-classes.txt plus explicit screenshot and reader-interaction phases",
+                    device_scope="scripts/device-ci-classes.txt plus screenshots, reader interactions, and API 36 native media and saved-search probes",
                     actions_url='https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + run_id)
     (output / 'test-release-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
     with zipfile.ZipFile(output / 'validation-evidence.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -105,6 +110,7 @@ def main():
 API 36 与 API 37（16 KB 页）常规设备套件分别通过 {device_results['36']['complete-device-suite']} / {device_results['37.0']['complete-device-suite']} 项，并通过使用同一临时测试证书的覆盖升级检查。
 覆盖升级检查使用 CI 内重新构建的基线与候选包，不能证明不同 CI 构建间的签名兼容。
 常规设备类清单见 `scripts/device-ci-classes.txt`；专用手工探针不包含在该计数中。设备测试使用离线夹具，未代替真实 NewsBlur / GitHub 用户账号联调、真机后台调度或人工 TalkBack 验收。
+API 36 另通过真实图片点击、长按、缩放、平移、关闭及阅读位置保持测试，以及保存搜索应用/删除回归；这些专用测试单独记录在设备日志中。
 
 `validation-evidence.zip` 包含测试报告、设备日志和实际产生的 {len(screenshots)} 张应用截图；截图来自 Android 模拟器。
 `SHA256SUMS` 提供 APK 和证据包的 SHA-256，可用 `sha256sum -c SHA256SUMS` 校验。

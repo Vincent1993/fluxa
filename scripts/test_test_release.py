@@ -39,7 +39,12 @@ class TestPrerelease(unittest.TestCase):
             directory.mkdir()
             (directory / 'BUILD_COMMIT.txt').write_text(self.sha)
             (directory / 'device.txt').write_text('API=' + api.split('.')[0] + '\nPAGE_SIZE=' + str(page) + '\n')
-            for suite in ('upgrade-seed', 'upgrade-verify', 'complete-device-suite'):
+            suites = ['upgrade-seed', 'upgrade-verify', 'complete-device-suite',
+                      'screenshot-capture', 'screenshot-cleanup', 'reader-interactions-seed',
+                      'reader-interactions-verify', 'reader-interactions-cleanup']
+            if api == '36':
+                suites += ['reader-media', 'reader-triage']
+            for suite in suites:
                 (directory / (suite + '.log')).write_text('OK (1 test)\n')
         self.signature = ('Number of signers: 1\nSigner #1 certificate DN: CN=Android Debug\n'
                           'Signer #1 certificate SHA-256 digest: ' + 'c' * 64 + '\n')
@@ -82,6 +87,12 @@ class TestPrerelease(unittest.TestCase):
     def test_rejects_failed_device_suite(self):
         (self.candidate / 'fluxa-device-api-36/complete-device-suite.log').write_text('FAILURES!!!\n')
         with self.assertRaisesRegex(ValueError, 'Device suite did not pass'):
+            self.run_packager()
+
+    def test_rejects_skipped_media_probe(self):
+        (self.candidate / 'fluxa-device-api-36/reader-media.log').write_text(
+            'INSTRUMENTATION_STATUS_CODE: -3\nOK (1 test)\n')
+        with self.assertRaisesRegex(ValueError, '36/reader-media'):
             self.run_packager()
 
     def test_rejects_wrong_device_page_size(self):
