@@ -511,36 +511,37 @@ class AppScreenshotCaptureTest {
     private fun reveal(sync: DeviceFlowSync, scenario: ActivityScenario<MainActivity>, needle: String,
         fraction: Float = .3f, move: Boolean = true): JSONObject {
         fun sample(): Pair<JSONObject, Float> {
-            val probe = NativeDocumentSnapshotProbe()
             var y = 0; var width = 0; var height = 0; var content = 0
+            val viewport = android.graphics.Rect()
             scenario.onActivity {
                 val web = views(it.window.decorView).filterIsInstance<WebView>().single()
                 check(web.title == titles[0] && web.progress == 100 && web.isShown)
                 check(!web.settings.javaScriptEnabled)
                 y = web.scrollY; width = web.width; height = web.height; content = web.contentHeight
                 check(width > 0 && height > 0 && content > 0)
-                web.onProvideVirtualStructure(probe.sink)
+                val origin = IntArray(2).also(web::getLocationOnScreen)
+                viewport.set(origin[0], origin[1], origin[0] + width, origin[1] + height)
             }
-            check(probe.awaitCompletion()) { "Native document snapshot timeout" }
-            val entries = probe.flatten()
-            val target = checkNotNull(entries.filter { it.text?.contains(needle) == true &&
-                it.bounds.width() > 0 && it.bounds.height() > 0 }.minByOrNull { it.bounds.height() }) {
+            val entries = sync.accessibilityParagraphs()
+            val target = checkNotNull(entries.filter { it.text.contains(needle) &&
+                it.unclippedScreenBounds?.let { b -> b.width() > 1 && b.height() > 1 } == true }
+                .minByOrNull { checkNotNull(it.unclippedScreenBounds).height() }) {
                 "Actual native paragraph missing: $needle"
             }
-            // flatten() already applies the document's native scroll offsets.
-            // These bounds are in the WebView viewport; subtracting scrollY again
-            // makes an actually visible caption look offscreen and causes oscillation.
-            val visible = target.bounds.width() > 1 && target.bounds.height() > 1 &&
-                target.bounds.left >= 0 && target.bounds.right <= width &&
-                target.bounds.top >= 0 && target.bounds.bottom <= height
+            val screenBounds = checkNotNull(target.unclippedScreenBounds)
+            // Provider extras are un-clipped SCREEN pixels, already scrolled. Only
+            // remove the host's screen origin; never subtract scrollY a second time.
+            val bounds = android.graphics.Rect(screenBounds).apply { offset(-viewport.left, -viewport.top) }
+            val visible = target.visible && viewport.contains(screenBounds)
             return JSONObject().put("progress", 100).put("width", width).put("height", height)
                 .put("contentHeight", content).put("scrollY", y).put("javascriptEnabled", false)
-                .put("matchedText", target.text).put("bounds", target.bounds.toShortString())
+                .put("matchedText", target.text).put("bounds", bounds.toShortString())
+                .put("geometrySource", "native-accessibility-unclipped-screen-bounds")
                 .put("visible", visible).put("visibleBody", JSONArray(entries.filter {
-                    !it.text.isNullOrBlank() && it.bounds.width() > 1 && it.bounds.height() > 1 &&
-                        it.bounds.left >= 0 && it.bounds.right <= width &&
-                        it.bounds.top >= 0 && it.bounds.bottom <= height
-                }.map { it.text }.distinct())) to (target.bounds.top - height * fraction)
+                    it.visible && it.unclippedScreenBounds?.let { b ->
+                        b.width() > 1 && b.height() > 1 && viewport.contains(b)
+                    } == true
+                }.map { it.text }.distinct())) to (bounds.top - height * fraction)
         }
         for (attempt in 0..35) {
             var previous: String? = null

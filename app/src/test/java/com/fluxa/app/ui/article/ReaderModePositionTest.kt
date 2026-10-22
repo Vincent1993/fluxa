@@ -55,7 +55,15 @@ class ReaderModePositionTest {
 
     @Config(sdk = [28], shadows = [LayoutSamplingWebView::class])
     @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
-    @Test fun explorationFallbackRetainsOnlySamePositionAnchorAndRejectsLateAssistAcrossModes() = runTest {
+    @Test fun explorationFallbackRetainsOnlySamePositionAnchorAndRejectsLateAssistAcrossModes() =
+        accessibilityFallback(exploration = true)
+
+    @Config(sdk = [28], shadows = [LayoutSamplingWebView::class])
+    @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
+    @Test fun nonExploringAccessibilityClientAlsoRejectsConcurrentAndLateAssist() =
+        accessibilityFallback(exploration = false)
+
+    private fun accessibilityFallback(exploration: Boolean) = runTest {
         val activity = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).setup()
         val name = "exploration-position-${UUID.randomUUID()}"
         val owned = object : ContextWrapper(activity.get()) {
@@ -83,7 +91,8 @@ class ReaderModePositionTest {
             assertTrue(state, web.owns(page))
             assertTrue(state, state.startsWith("keyHash=${com.fluxa.app.data.directrss.stableHash(key)} "))
             assertTrue(state, state.contains("retired=false ready=$ready writable=$writable "))
-            assertTrue(state, manager.isEnabled && manager.isTouchExplorationEnabled)
+            assertTrue(state, manager.isEnabled)
+            assertEquals(state, exploration, manager.isTouchExplorationEnabled)
             assertTrue(state, state.endsWith("assistBlocked=true"))
         }
         fun commit(page: ReaderPage, key: String, expectedRange: Int) {
@@ -116,7 +125,7 @@ class ReaderModePositionTest {
             val rssPosition = ReadingPosition(.5f, 500, 1000, NativeAnchors.capture(listOf(block), 500))
             val fullPosition = ReadingPosition(.2f, 800, 4000)
             reader.savePosition(rssKey, rssPosition); reader.savePosition(fullKey, fullPosition)
-            accessibility.setTouchExplorationEnabled(true); accessibility.setEnabled(true)
+            accessibility.setTouchExplorationEnabled(exploration); accessibility.setEnabled(true)
             // Keep parent/child dimensions through Activity/FrameLayout traversal.
             // The fixture shadow applies real View framing instead of the stock
             // no-op WebView provider; neither height nor width getters are faked.
@@ -137,7 +146,7 @@ class ReaderModePositionTest {
             val moved = reader.position(rssKey)
             assertEquals(650, moved.pixels); assertNull(moved.anchor)
             // Public state changes re-enable ordinary sampling. Leave it pending,
-            // then enable exploration and rebind FULL before its async completion.
+            // then enable an accessibility client and rebind FULL before completion.
             accessibility.setTouchExplorationEnabled(false); accessibility.setEnabled(false)
             main.idle()
             val pending = native.samples.single()
@@ -145,7 +154,7 @@ class ReaderModePositionTest {
             val document = pending.asyncNewChild(0)
             document.setDimens(0, 0, 0, 0, 600, 900)
             document.setText("Obsolete RSS geometry")
-            accessibility.setTouchExplorationEnabled(true); accessibility.setEnabled(true)
+            accessibility.setTouchExplorationEnabled(exploration); accessibility.setEnabled(true)
             main.idle()
             val full = ReaderPage(fullKey, reader)
             web.render(full, "<p>FULL</p>", 100)

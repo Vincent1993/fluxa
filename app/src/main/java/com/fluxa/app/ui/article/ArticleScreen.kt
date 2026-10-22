@@ -450,10 +450,7 @@ internal fun ArticleContent(article: Article, settings: ReaderSettings, store: R
     }
     val owner = LocalLifecycleOwner.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    // WebView 133 can paint a replacement palette while retaining an empty native
-    // accessibility document on the reused host. Give palette changes a fresh
-    // host/controller pair; ReaderPreferences still owns the reading position.
-    val controller = remember(positionKey, store, owner, context, loadingBackground) { ReaderPage(positionKey, store) }
+    val controller = remember(positionKey, store, owner, context) { ReaderPage(positionKey, store) }
     var image by remember(positionKey) { mutableStateOf<String?>(null) }
     val embedded = remember(article.contentHtml) { ReaderImageResource.embedded(article.contentHtml) }
     val imageAlts = remember(article.contentHtml) {
@@ -480,9 +477,8 @@ internal fun ArticleContent(article: Article, settings: ReaderSettings, store: R
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer); controller.release() }
     }
-    // The native host stays stable across article changes within a palette. Never
-    // carry it into another Context/Activity, lifecycle owner or document palette.
-    key(owner, context, loadingBackground) {
+    // Keep the native host across article/palette changes, but never across Activities.
+    key(owner, context) {
     AndroidView(modifier = modifier.fillMaxWidth().testTag("reader-content"), factory = { context ->
         ReaderWebView(context).apply {
             // Keep Chromium's native document subtree: a host contentDescription can
@@ -622,7 +618,11 @@ internal class ReaderPage(private val id: String, private val store: ReaderPrefe
     private val explorationListener = android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener {
         accessibilityChanged()
     }
-    private fun assistBlocked() = accessibility?.let { it.isEnabled && it.isTouchExplorationEnabled } == true
+    // Assist snapshots and live accessibility share Chromium's native document
+    // machinery. A client need not use touch exploration (e.g. switch access or
+    // UiAutomation); give every active accessibility connection exclusive use.
+    // Optional semantic sampling falls back to the persisted pixel/fraction position.
+    private fun assistBlocked() = accessibility?.isEnabled == true
     private fun invalidateSnapshot() {
         snapshotSerial++
         snapshot?.cancel(); snapshot = null
@@ -965,11 +965,11 @@ internal class ReaderPage(private val id: String, private val store: ReaderPrefe
     private fun refresh(view: WebView, generation: Long, pass: Int) {
         if (retired || web !== view || !guard.accepts(id, generation)) return
         // Assist snapshots are optional layout sampling, not the native AX tree.
-        // Avoid concurrent assist/native screen-reader engines on affected WebViews.
+        // Avoid concurrent assist/native accessibility engines on affected WebViews.
         // Use public state only; no provider flags, service identity or focus changes.
         if (assistBlocked()) {
             if (com.fluxa.app.BuildConfig.DEBUG) android.util.Log.d("ReaderNativeLifecycle",
-                "assist-layout skipped view=${System.identityHashCode(view)} generation=$generation pass=$pass touchExploration=true")
+                "assist-layout skipped view=${System.identityHashCode(view)} generation=$generation pass=$pass accessibilityEnabled=true")
             invalidateSnapshot()
             finishRestore(view, generation)
             return

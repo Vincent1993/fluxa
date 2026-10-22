@@ -45,6 +45,12 @@ internal fun nativeWebText(
         node.contentDescription?.toString()?.takeIf { it.isNotBlank() } else null
 }
 
+internal data class NativeWebParagraph(
+    val text: String,
+    val visible: Boolean,
+    val unclippedScreenBounds: Rect?
+)
+
 /** Synchronization only: never repeats a click or retries a flow. */
 internal class DeviceFlowSync(
     private val compose: ComposeTestRule,
@@ -509,7 +515,10 @@ internal class DeviceFlowSync(
     }
 
     /** Actual WebView DOM descendants: text or provider-native leaf descriptions, never host labels. */
-    fun accessibilityText(visibleOnly: Boolean = false): List<String> {
+    fun accessibilityText(visibleOnly: Boolean = false): List<String> =
+        accessibilityParagraphs().filter { !visibleOnly || it.visible }.map { it.text }
+
+    fun accessibilityParagraphs(): List<NativeWebParagraph> {
         val automation = readerUiAutomation()
         // A theme reload reuses the WebView host with a new native document. Root
         // refresh alone can retain old virtual-child IDs in UiAutomation's cache.
@@ -518,15 +527,28 @@ internal class DeviceFlowSync(
             "Could not clear instrumentation accessibility cache"
         }
         val root = automation.rootInActiveWindow ?: return emptyList()
-        fun collect(node: android.view.accessibility.AccessibilityNodeInfo, webBounds: Rect?): List<String> {
+        fun collect(node: android.view.accessibility.AccessibilityNodeInfo, webBounds: Rect?): List<NativeWebParagraph> {
             // UiAutomation can return a cached, incomplete provider tree. Refresh even
             // the root before reading any fields; failed nodes wait for the next sample.
             if (!node.refresh()) return emptyList()
             val bounds = Rect().also(node::getBoundsInScreen)
             // Keep the outer native WebView viewport, not a nested document's bounds.
             val viewport = webBounds ?: bounds.takeIf { node.className?.toString() == "android.webkit.WebView" }
-            val result = mutableListOf<String>()
-            nativeWebText(node, webBounds, visibleOnly)?.let(result::add)
+            val result = mutableListOf<NativeWebParagraph>()
+            nativeWebText(node, webBounds, visibleOnly = false)?.let { text ->
+                // Chromium exposes the original screen bounds before clipping in
+                // AccessibilityNodeInfo.extras. Read them from this SAME live tree;
+                // an Assist snapshot can interfere with it during document changes.
+                // Missing geometry stays missing: clipped bounds cannot prove that
+                // the complete paragraph is visible.
+                val keys = listOf("Left", "Top", "Right", "Bottom")
+                    .map { "AccessibilityNodeInfo.unclipped$it" }
+                val full = if (keys.all(node.extras::containsKey)) Rect(
+                    node.extras.getInt(keys[0]), node.extras.getInt(keys[1]),
+                    node.extras.getInt(keys[2]), node.extras.getInt(keys[3])) else null
+                result += NativeWebParagraph(text,
+                    nativeWebText(node, webBounds, visibleOnly = true) != null, full)
+            }
             for (i in 0 until node.childCount) node.getChild(i)?.let { child ->
                 try { result += collect(child, viewport) }
                 finally { @Suppress("DEPRECATION") child.recycle() }
