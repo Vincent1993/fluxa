@@ -26,6 +26,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluxa.app.data.local.*
+import com.fluxa.app.ui.article.ReaderWebView
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -408,10 +409,28 @@ class AppScreenshotCaptureTest {
                 // Return to the same intro with genuine reverse swipes before comparing palettes.
                 reveal(sync, scenario, intro, .45f)
                 fun theme(label: String, filename: String) {
+                    var beforeY = 0
+                    var beforeHeight = 0
+                    scenario.onActivity {
+                        val web = views(it.window.decorView).filterIsInstance<ReaderWebView>().single()
+                        beforeY = web.scrollY; beforeHeight = web.contentHeight
+                    }
                     icon("阅读设置")
                     val chip = compose.onNodeWithContentDescription(label); chip.performScrollTo(); sync.settled(chip)
                     chip.performTouchInput { click() }; chip.assertIsSelected(); touch("完成")
-                    sync.reader(titles[0]); sync.body(intro)
+                    sync.reader(titles[0])
+                    // A palette-only replacement must retain the actual viewport,
+                    // as well as publish the real body and visible prose below.
+                    sync.await {
+                        var retained = false
+                        scenario.onActivity {
+                            val web = views(it.window.decorView).filterIsInstance<ReaderWebView>().single()
+                            retained = !web.documentCovered && web.progress == 100 &&
+                                web.contentHeight == beforeHeight && kotlin.math.abs(web.scrollY - beforeY) <= 2
+                        }
+                        retained
+                    }
+                    sync.body(intro)
                     shot(filename, "真实阅读主题：$label", reader, reveal(sync, scenario, intro, move = false))
                 }
                 theme("深色", "20-reader-dark.png")

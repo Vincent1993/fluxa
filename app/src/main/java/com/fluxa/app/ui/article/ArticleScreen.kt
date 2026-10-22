@@ -450,7 +450,10 @@ internal fun ArticleContent(article: Article, settings: ReaderSettings, store: R
     }
     val owner = LocalLifecycleOwner.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val controller = remember(positionKey, store, owner, context) { ReaderPage(positionKey, store) }
+    // WebView 133 can paint a replacement palette while retaining an empty native
+    // accessibility document on the reused host. Give palette changes a fresh
+    // host/controller pair; ReaderPreferences still owns the reading position.
+    val controller = remember(positionKey, store, owner, context, loadingBackground) { ReaderPage(positionKey, store) }
     var image by remember(positionKey) { mutableStateOf<String?>(null) }
     val embedded = remember(article.contentHtml) { ReaderImageResource.embedded(article.contentHtml) }
     val imageAlts = remember(article.contentHtml) {
@@ -477,9 +480,9 @@ internal fun ArticleContent(article: Article, settings: ReaderSettings, store: R
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer); controller.release() }
     }
-    // Only the native host is stable across positionKey changes. Never carry it into
-    // another Context/Activity or lifecycle owner; article controllers remain independent.
-    key(owner, context) {
+    // The native host stays stable across article changes within a palette. Never
+    // carry it into another Context/Activity, lifecycle owner or document palette.
+    key(owner, context, loadingBackground) {
     AndroidView(modifier = modifier.fillMaxWidth().testTag("reader-content"), factory = { context ->
         ReaderWebView(context).apply {
             // Keep Chromium's native document subtree: a host contentDescription can
