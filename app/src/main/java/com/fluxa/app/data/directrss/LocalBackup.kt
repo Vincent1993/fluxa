@@ -156,7 +156,7 @@ object BackupJson {
         val views = t.getJSONArray("sources").rows(501) { it.s("id", 256).also { s -> require(s in sourceIds) } to SourceTriage(it.getBoolean("oldest"), it.getBoolean("hide")) }
         unique(views) { it.first }
         val saved = t.getJSONArray("saved").rows(50) { s -> SavedSearch(id(s.s("id", 256)), s.s("name", 80), SearchScope(s.s("query", 256),
-            s.optional("source")?.also { require(it in sourceIds) }, ArticleFilter.valueOf(s.s("filter", 32)),
+            s.optional("source")?.also { require(it in sourceIds) }, ArticleFilter.fromPersisted(s.s("filter", 32)),
             if (s.isNull("after")) null else s.n("after"), if (s.isNull("before")) null else s.n("before"), s.getBoolean("hidden"))) }
         unique(saved) { it.id }
         val rules = t.getJSONArray("rules").rows(100) { r -> TriageRule(id(r.s("id", 256)), r.optional("source")?.also { require(it in sourceIds) },

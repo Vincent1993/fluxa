@@ -73,9 +73,12 @@ class FeedListAnchorUiTest {
         }
         compose.waitForIdle()
         val list = compose.onNode(hasScrollToIndexAction())
-        // The context title is fixed in TopAppBar; measure the scrolling item 0 filter.
-        val filterBefore = compose.onNodeWithContentDescription("收藏")
-            .assertIsSelected().fetchSemanticsNode().boundsInRoot
+        // The expanded filter collection wraps over several lines. Measure the last
+        // chip: a partial header must show its tail, not necessarily its first row.
+        compose.onNodeWithContentDescription("收藏").assertIsSelected()
+        val tailLabel = ArticleFilter.entries.last().label
+        val filterBeforeTop = compose.onNodeWithContentDescription(tailLabel)
+            .fetchSemanticsNode().positionInRoot.y
         // Establish the partial-header anchor before looking up a possibly uncomposed row.
         // This is initial setup only; never scroll to repair the position on return.
         list.performScrollToIndex(1)
@@ -100,13 +103,13 @@ class FeedListAnchorUiTest {
         val before = titleNode.boundsInRoot
         val source = compose.onAllNodesWithTag("article-source", useUnmergedTree = true)[0]
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val filter = compose.onNodeWithContentDescription("收藏")
-            .assertIsSelected().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val filter = compose.onNodeWithContentDescription(tailLabel)
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val date = compose.onAllNodesWithTag("article-date", useUnmergedTree = true)[0]
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         // Positive scroll AND a still-visible piece of item 0 proves this is a
         // partial header anchor, not an article-index anchor or an unscrolled list.
-        assertTrue("Header must have scrolled", filter.top < filterBefore.top - 2f)
+        assertTrue("Header must have scrolled", filter.top < filterBeforeTop - 2f)
         assertTrue("Header remains in viewport", filter.bottom > viewport.top && filter.top < viewport.bottom)
         assertTrue("Article follows the visible header", date.top >= filter.bottom)
         assertTrue("Source follows the visible header", source.top >= filter.bottom)

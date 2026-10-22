@@ -13,6 +13,14 @@ run_phase() {
     ! grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"
     grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
 }
+export_reader_evidence() {
+    mkdir -p "$reports/reader-interactions"
+    while IFS= read -r name; do
+        name=${name//$'\r'/}
+        [[ "$name" =~ ^reeder-interaction-2026-10-08-(evidence-[0-9]+-(middle-hidden-tools|reverse-restored-tools)\.png|verified-state\.json)$ ]] || continue
+        "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/$name" > "$reports/reader-interactions/$name"
+    done < <("${adb_cmd[@]}" shell run-as com.fluxa.app.debug ls files)
+}
 active=
 cleanup() {
     local status=$?
@@ -20,6 +28,7 @@ cleanup() {
     if [[ "$active" = screenshots ]]; then
         run_phase screenshot-cleanup com.fluxa.app.AppScreenshotCaptureTest screenshotPhase cleanup || status=1
     elif [[ "$active" = interactions ]]; then
+        export_reader_evidence || status=1
         run_phase reader-interactions-cleanup com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase cleanup || status=1
     fi
     exit "$status"
@@ -36,8 +45,14 @@ while IFS= read -r name; do
     "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/app-screenshots/$name" > "$reports/app-screenshots/$name"
 done < <("${adb_cmd[@]}" shell run-as com.fluxa.app.debug ls files/app-screenshots)
 test -n "$(find "$reports/app-screenshots" -name '*.png' -print -quit)"
+# This is the isolated CI AVD. The interaction fixture requires actual offline
+# connectivity and asserts it itself before touching any data.
+"${adb_cmd[@]}" shell svc wifi disable
+"${adb_cmd[@]}" shell svc data disable
+"${adb_cmd[@]}" shell cmd connectivity airplane-mode enable
 active=interactions
 run_phase reader-interactions-seed com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase seed
 run_phase reader-interactions-verify com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase verify
+export_reader_evidence
 run_phase reader-interactions-cleanup com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase cleanup
 active=

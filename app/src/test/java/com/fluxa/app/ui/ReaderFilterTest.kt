@@ -25,6 +25,18 @@ class ReaderFilterTest {
         assertFalse(matchesReaderFilter(article.copy(savedAtEpochSeconds = null), FeedListState(filter = ArticleFilter.Saved)))
         assertTrue(matchesReaderFilter(article, FeedListState(filter = ArticleFilter.Annotated)))
     }
+    @Test fun savedAliasCombinesRemoteMetadataAndLocalReadLaterWithoutDuplicateChoices() {
+        assertEquals(ArticleFilter.ReadLater, ArticleFilter.Saved)
+        assertEquals(ArticleFilter.ReadLater, ArticleFilter.fromPersisted("Saved"))
+        assertEquals(ArticleFilter.entries.size, ArticleFilter.entries.map { it.label }.distinct().size)
+        val local = article.copy(id = "local", savedAtEpochSeconds = null, readLater = true)
+        val neither = article.copy(id = "neither", savedAtEpochSeconds = null)
+        val scope = SearchScope(filter = ArticleFilter.fromPersisted("Saved"))
+        assertEquals(setOf(article.id, local.id), TriageEngine().apply(listOf(article, local, neither),
+            scope, TriageConfig()).articles.map { it.id }.toSet())
+        assertTrue(matchesReaderFilter(local, FeedListState(filter = scope.filter)))
+        assertFalse(matchesReaderFilter(neither, FeedListState(filter = scope.filter)))
+    }
     @Test fun mergedTriageKeepsPublishedArchivesAndLocalTagsReachable() {
         val archived = article.copy(archivedAtEpochSeconds = 10)
         val engine = TriageEngine()

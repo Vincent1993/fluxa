@@ -372,7 +372,7 @@ fun FeedListScreen(
                             Column(Modifier.fillMaxWidth()) {
                                 FlowRow(Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    ArticleFilter.entries.filter { it != ArticleFilter.Saved }.forEach { filter ->
+                                    ArticleFilter.entries.forEach { filter ->
                                         FilterChip(selected = state.filter == filter,
                                             onClick = { onFilter(filter) },
                                             label = { Text(filter.label, Modifier.clearAndSetSemantics {}) },

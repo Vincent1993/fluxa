@@ -77,6 +77,18 @@ class TriageStage3Test {
         assertTrue(TriageRule("keyword", "direct-rss:a", RuleKind.KeepKeyword, "alpha & beta").matches(rows[1], plainBody(rows[1].contentHtml)))
     }
 
+    @Test fun legacySavedSearchRestoresTheCanonicalReadLaterCollection() {
+        val config = TriageConfig(saved = listOf(SavedSearch("old", "Later", SearchScope(filter = ArticleFilter.ReadLater))))
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("rss_triage_v1", Context.MODE_PRIVATE)
+        prefs.edit().clear().commit()
+        TriageSettings(context).save(config)
+        val encoded = org.json.JSONObject(prefs.getString("config", null)!!)
+        encoded.getJSONArray("saved").getJSONObject(0).put("filter", "Saved")
+        prefs.edit().putString("config", encoded.toString()).commit()
+        assertEquals(config, TriageSettings(context).load())
+    }
+
     @Test fun fullSavedSearchAndRulesReopenMissingSourceDoesNotBroadenAndBoundsEnforced() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("rss_triage_v1", Context.MODE_PRIVATE).edit().clear().commit()

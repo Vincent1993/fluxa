@@ -93,9 +93,9 @@ internal fun TriageSheet(state: FeedListState, apply: (SearchScope) -> Unit, con
                     IconAction("此来源隐藏已读", Icons.Outlined.VisibilityOff, { configure(config.copy(sources = config.sources + (source to pref.copy(hideRead = !pref.hideRead)))) }, selected = pref.hideRead)
                 }
             }
-            FlowRow { ArticleFilter.entries.filter { it != ArticleFilter.Saved }.forEach { filter -> IconAction(filter.label, when(filter) {
+            FlowRow { ArticleFilter.entries.forEach { filter -> IconAction(filter.label, when(filter) {
                 ArticleFilter.All -> Icons.Outlined.SelectAll; ArticleFilter.Unread -> Icons.Outlined.MarkEmailUnread
-                ArticleFilter.ReadLater, ArticleFilter.Saved -> Icons.Outlined.BookmarkAdd
+                ArticleFilter.ReadLater -> Icons.Outlined.BookmarkAdd
                 ArticleFilter.Archived -> Icons.Outlined.Archive
                 ArticleFilter.Annotated -> Icons.Outlined.EditNote
                 ArticleFilter.Starred -> Icons.Outlined.Star; ArticleFilter.Last24Hours -> Icons.Outlined.Schedule

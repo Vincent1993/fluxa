@@ -359,6 +359,12 @@ internal class DeviceFlowSync(
         }
         var moves = 0
         while (accessibilityText().none { it.contains(bodyText) } && moves < 12) {
+            // A short article can finish drawing before Chromium publishes its
+            // accessible paragraphs. Await the exact body below instead of issuing
+            // a boundary swipe (which could navigate to another article).
+            var canScrollForward = false
+            scenario.onActivity { canScrollForward = expectedWeb?.canScrollVertically(1) == true }
+            if (!canScrollForward) break
             guardSelectedWeb("before heading swipe ${moves + 1}", requireForward = true)
             compose.onNodeWithTag("reader-content").performTouchInput {
                 swipe(androidx.compose.ui.geometry.Offset(width / 2f, height * .7f),

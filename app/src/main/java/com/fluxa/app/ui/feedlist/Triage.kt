@@ -87,8 +87,7 @@ class TriageEngine(private val clock: Clock = Clock.systemUTC()) {
         else compareByDescending<Article> { it.publishedAt }.thenBy { it.id }
         val filtered = scoped.filter { (scope.filter != ArticleFilter.Unread || !it.isRead) &&
             (scope.filter != ArticleFilter.Starred || it.isStarred) &&
-            (scope.filter != ArticleFilter.ReadLater || it.readLater) &&
-            (scope.filter != ArticleFilter.Saved || it.savedAtEpochSeconds != null) &&
+            (scope.filter != ArticleFilter.ReadLater || it.readLater || it.savedAtEpochSeconds != null) &&
             (scope.filter != ArticleFilter.Annotated || it.annotationCount > 0) }.sortedWith(comparator)
         val groups = if (config.collapse) filtered.groupBy { displayCanonical(it.originalUrl) ?: "id:${it.id}" }.values
             .associate { it.first().id to it.toList() } else emptyMap()
@@ -133,7 +132,7 @@ class TriageSettings @Inject constructor(@ApplicationContext context: Context) {
         val rules = o.optJSONArray("rules") ?: JSONArray()
         return TriageConfig(sources.keys().asSequence().associateWith { id -> sources.getJSONObject(id).let { SourceTriage(it.optBoolean("oldest"), it.optBoolean("hide")) } },
             (0 until minOf(saved.length(), 50)).map { saved.getJSONObject(it).let { s -> SavedSearch(s.getString("id"), s.getString("name"),
-                SearchScope(s.getString("query"), s.optional("source"), ArticleFilter.valueOf(s.getString("filter")), s.optional("after")?.toLong(), s.optional("before")?.toLong(), s.optBoolean("hidden"), s.optString("tag"))) } },
+                SearchScope(s.getString("query"), s.optional("source"), ArticleFilter.fromPersisted(s.getString("filter")), s.optional("after")?.toLong(), s.optional("before")?.toLong(), s.optBoolean("hidden"), s.optString("tag"))) } },
             (0 until minOf(rules.length(), 100)).map { rules.getJSONObject(it).let { r -> TriageRule(r.getString("id"), r.optional("source"), RuleKind.valueOf(r.getString("kind")), r.getString("value"), r.optBoolean("enabled", true)) } }, o.optBoolean("collapse"), o.optBoolean("comfortable"), o.optBoolean("summary", true), o.optBoolean("thumbnail", true))
     }
 }

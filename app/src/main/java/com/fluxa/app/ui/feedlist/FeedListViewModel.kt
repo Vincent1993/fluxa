@@ -16,7 +16,16 @@ import javax.inject.Inject
 import java.time.LocalDate
 import java.time.ZoneId
 
-enum class ArticleFilter(val label: String) { All("全部"), Unread("未读"), Starred("收藏"), ReadLater("稍后读"), Last24Hours("24 小时"), Saved("稍后读"), Archived("归档"), Annotated("笔记与高亮") }
+enum class ArticleFilter(val label: String) {
+    All("全部"), Unread("未读"), Starred("收藏"), ReadLater("稍后读"), Last24Hours("24 小时"), Archived("归档"), Annotated("笔记与高亮");
+
+    companion object {
+        // The published reader called this collection Saved. Keep old callers and
+        // persisted searches compatible without exposing two identical choices.
+        val Saved: ArticleFilter get() = ReadLater
+        fun fromPersisted(value: String): ArticleFilter = if (value == "Saved") ReadLater else valueOf(value)
+    }
+}
 
 data class FeedListState(
     val articles: List<Article> = emptyList(),
@@ -58,7 +67,7 @@ class FeedListViewModel @Inject constructor(
     private val _state = MutableStateFlow(FeedListState(
         query = savedState.get<String>("query").orEmpty().take(256),
         source = savedState["source"],
-        filter = runCatching { ArticleFilter.valueOf(savedState["filter"] ?: "All") }.getOrDefault(ArticleFilter.All),
+        filter = runCatching { ArticleFilter.fromPersisted(savedState["filter"] ?: "All") }.getOrDefault(ArticleFilter.All),
         scope = SearchScope(after = savedState["after"], before = savedState["before"], showHidden = savedState["hidden"] ?: false, tag = savedState["tag"] ?: ""),
         triage = triageSettings?.load() ?: TriageConfig(),
         swipeConfig = swipeSettings?.load() ?: SwipeConfig()
@@ -252,7 +261,7 @@ internal fun matchesReaderFilter(article: Article, state: FeedListState, zone: Z
     if (state.filter == ArticleFilter.Archived && !archived || state.filter != ArticleFilter.Archived && archived) return false
     if (state.source != null && article.source != state.source) return false
     if (state.filter == ArticleFilter.Unread && article.isRead || state.filter == ArticleFilter.Starred && !article.isStarred) return false
-    if (state.filter == ArticleFilter.Saved && article.savedAtEpochSeconds == null) return false
+    if (state.filter == ArticleFilter.ReadLater && !article.readLater && article.savedAtEpochSeconds == null) return false
     if (state.filter == ArticleFilter.Annotated && article.annotationCount == 0) return false
     if (state.tag.isNotBlank() && article.tags.none { it.equals(state.tag, true) }) return false
     val day = article.publishedAt.atZone(zone).toLocalDate()
