@@ -3,6 +3,7 @@ package com.fluxa.app
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import com.fluxa.app.data.directrss.*
 import com.fluxa.app.domain.model.Subscription
 import com.fluxa.app.ui.feedlist.*
@@ -81,24 +82,47 @@ class LocalSubscriptionSheetsTest {
             }), {}) } }
         compose.onNodeWithContentDescription("编辑 Fixture remote").assertDoesNotExist()
         compose.onNodeWithText("新文件夹名称").performScrollTo().performTextInput("Reading")
-        compose.onNodeWithContentDescription("创建文件夹").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("编辑 Fixture local").performScrollTo().performClick()
+        closeSoftKeyboard()
+        clickManagerAction("创建文件夹")
+        compose.waitUntil(10_000) { folders.singleOrNull()?.name == "Reading" }
+        clickManagerAction("编辑 Fixture local")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("显示别名（留空恢复原标题）").fetchSemanticsNodes().size == 1
+        }
         compose.onNodeWithText("显示别名（留空恢复原标题）").performScrollTo().performTextInput("Alias")
-        compose.onNodeWithContentDescription("移至 Reading").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("保存订阅设置").performScrollTo().performClick()
+        closeSoftKeyboard()
+        clickManagerAction("移至 Reading")
+        clickManagerAction("保存订阅设置")
         compose.runOnIdle { assertEquals("Alias", changes.last().alias); assertEquals("folder", changes.last().folderId) }
-        compose.onNodeWithContentDescription("暂停 Alias").performScrollTo().performClick()
+        clickManagerAction("暂停 Alias")
         compose.runOnIdle { assertTrue(changes.last().paused) }
-        compose.onNodeWithContentDescription("恢复 Alias").performScrollTo().performClick()
+        clickManagerAction("恢复 Alias")
         compose.runOnIdle { assertFalse(changes.last().paused) }
-        compose.onNodeWithContentDescription("取消订阅 Alias").performScrollTo().performClick()
+        clickManagerAction("取消订阅 Alias")
         compose.runOnIdle { assertTrue(changes.last().archived) }
-        compose.onNodeWithContentDescription("撤销取消订阅").performScrollTo().performClick()
+        clickManagerAction("撤销取消订阅")
         compose.runOnIdle {
             assertFalse(changes.last().archived)
             assertEquals("local", changes.last().id)
             assertEquals("folder", changes.last().folderId)
             assertEquals("Alias", changes.last().alias)
         }
+    }
+
+    /** The sheet moves with the IME; Compose idling alone does not settle its screen position. */
+    private fun clickManagerAction(label: String) {
+        val matcher = hasContentDescription(label) and isEnabled()
+        compose.waitUntil(10_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
+        val node = compose.onNode(matcher).performScrollTo()
+        var previous: androidx.compose.ui.geometry.Rect? = null
+        compose.waitUntil(10_000) {
+            val visible = try { node.assertIsDisplayed(); true } catch (_: AssertionError) { false }
+            val target = node.fetchSemanticsNode()
+            val bounds = androidx.compose.ui.geometry.Rect(target.positionOnScreen, target.boundsInWindow.size)
+            val settled = visible && bounds.width > 0 && bounds.height > 0 && bounds == previous
+            previous = bounds.takeIf { visible }
+            settled
+        }
+        node.assertIsEnabled().performTouchInput { click() }
     }
 }
