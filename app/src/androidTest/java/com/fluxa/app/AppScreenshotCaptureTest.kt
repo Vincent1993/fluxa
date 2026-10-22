@@ -498,8 +498,9 @@ class AppScreenshotCaptureTest {
             // flatten() already applies the document's native scroll offsets.
             // These bounds are in the WebView viewport; subtracting scrollY again
             // makes an actually visible caption look offscreen and causes oscillation.
-            val visible = target.bounds.left < width && target.bounds.right > 0 &&
-                target.bounds.top < height && target.bounds.bottom > 0
+            val visible = target.bounds.width() > 1 && target.bounds.height() > 1 &&
+                target.bounds.left >= 0 && target.bounds.right <= width &&
+                target.bounds.top >= 0 && target.bounds.bottom <= height
             return JSONObject().put("progress", 100).put("width", width).put("height", height)
                 .put("contentHeight", content).put("scrollY", y).put("javascriptEnabled", false)
                 .put("matchedText", target.text).put("bounds", target.bounds.toShortString())
@@ -508,7 +509,6 @@ class AppScreenshotCaptureTest {
                         it.bounds.top < height && it.bounds.bottom > 0
                 }.map { it.text }.distinct())) to (target.bounds.top - height * fraction)
         }
-        var last: JSONObject? = null
         for (attempt in 0..35) {
             var previous: String? = null
             var stableSince = SystemClock.uptimeMillis()
@@ -523,10 +523,14 @@ class AppScreenshotCaptureTest {
                 SystemClock.uptimeMillis() - stableSince >= 500
             }
             val (proof, delta) = sample()
-            if (proof.getBoolean("visible") && (!move || kotlin.math.abs(delta) < 48 ||
-                    last?.optInt("scrollY") == proof.getInt("scrollY"))) return proof
+            if (proof.getBoolean("visible")) {
+                // fraction guides offscreen scrolling; it is not a pixel-perfect
+                // layout assertion. Once the paragraph fits, require real visible
+                // accessibility text rather than oscillating to align its baseline.
+                sync.await { sync.accessibilityText(visibleOnly = true).any { it.contains(needle) } }
+                return proof.put("accessibleVisibleTextMatched", true)
+            }
             check(move && attempt < 35) { "Native text not visibly reached: $proof" }
-            last = proof
             compose.onNodeWithTag("reader-content").performTouchInput {
                 val distance = delta.coerceIn(-height * .5f, height * .5f)
                 val start = if (distance >= 0) height * .8f else height * .2f

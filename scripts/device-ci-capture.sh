@@ -9,8 +9,8 @@ run_phase() {
     local label=$1 class=$2 argument=$3 value=$4
     "${adb_cmd[@]}" shell am instrument -w -e class "$class" -e "$argument" "$value" \
         -e screenshotDedicatedEmulator true -e readerInteractionsScreenshots 1 \
-        com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log"
-    ! grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"
+        com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log" || return 1
+    if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then return 1; fi
     grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
 }
 export_app_evidence() {
@@ -64,23 +64,27 @@ cleanup() {
     exit "$status"
 }
 trap cleanup EXIT
+overall=0
 active=screenshots
-run_phase screenshot-capture com.fluxa.app.AppScreenshotCaptureTest screenshotPhase capture
-run_phase screenshot-cleanup com.fluxa.app.AppScreenshotCaptureTest screenshotPhase cleanup
+run_phase screenshot-capture com.fluxa.app.AppScreenshotCaptureTest screenshotPhase capture || overall=1
 active=
-export_app_evidence
-test -n "$(find "$reports/app-screenshots" -name '*.png' -print -quit)"
+run_phase screenshot-cleanup com.fluxa.app.AppScreenshotCaptureTest screenshotPhase cleanup || exit 1
+export_app_evidence || overall=1
+test -n "$(find "$reports/app-screenshots" -name '*.png' -print -quit)" || overall=1
 # This is the isolated CI AVD. The interaction fixture requires actual offline
 # connectivity and asserts it itself before touching any data.
 "${adb_cmd[@]}" shell svc wifi disable
 "${adb_cmd[@]}" shell svc data disable
 "${adb_cmd[@]}" shell cmd connectivity airplane-mode enable
 active=interactions
-run_phase reader-interactions-seed com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase seed
-run_phase reader-interactions-verify com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase verify
-export_reader_evidence
-run_phase reader-interactions-cleanup com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase cleanup
+if run_phase reader-interactions-seed com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase seed; then
+    run_phase reader-interactions-verify com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase verify || overall=1
+else
+    overall=1
+fi
+export_reader_evidence || overall=1
 active=
+run_phase reader-interactions-cleanup com.fluxa.app.ReaderInteractionsDeviceTest readerInteractionsPhase cleanup || exit 1
 # These existing probes require an explicit owner on a fresh API 36 device.
 # Their synthetic fixtures retain real native touch, geometry and accessibility assertions.
 if [[ "$("${adb_cmd[@]}" shell getprop ro.build.version.sdk | tr -d '\r')" = 36 ]]; then
@@ -99,9 +103,12 @@ if [[ "$("${adb_cmd[@]}" shell getprop ro.build.version.sdk | tr -d '\r')" = 36 
         fi
         printf '%s\n' "$owner" | "${adb_cmd[@]}" shell run-as com.fluxa.app.debug sh -c "'cat > files/$owner.marker'"
         owned_marker=$owner
-        run_phase "reader-$probe" "$class" "$argument" "$owner"
-        export_media_evidence
+        run_phase "reader-$probe" "$class" "$argument" "$owner" || overall=1
+        export_media_evidence || overall=1
         "${adb_cmd[@]}" shell run-as com.fluxa.app.debug rm "files/$owned_marker.marker"
         owned_marker=
     done
 fi
+# Collect already-required independent probes after verified fixture cleanup, but
+# never turn a failed/skipped phase into a passing job or permit publication.
+exit "$overall"

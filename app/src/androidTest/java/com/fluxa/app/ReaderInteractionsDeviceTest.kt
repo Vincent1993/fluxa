@@ -425,6 +425,18 @@ class ReaderInteractionsDeviceTest {
             }
             stable(sync, scenario)
             assertEquals(title(0), sample(scenario).title)
+            // The pagination recognizer rejects multi-pointer streams, while the
+            // production listener intentionally leaves unclaimed input to Chromium.
+            // Its native pan may move away from bottom. Re-establish the boundary
+            // with actual gestures BEFORE testing cancellation of an already claimed
+            // pull. Never scroll programmatically or repair position after navigation.
+            for (attempt in 0..8) {
+                if (!sample(scenario).down) break
+                drag(up = true)
+                stable(sync, scenario)
+                assertEquals("Native multi-pointer input must not turn an article", title(0), sample(scenario).title)
+            }
+            assertEquals("Native boundary setup must recover the same bottom", expectedBottom, sample(scenario))
             // Also introduce a second pointer AFTER the pull has canceled Chromium.
             // Its remaining pointer UP must stay consumed, not become a native click.
             compose.onNodeWithTag("reader-content").performTouchInput {
