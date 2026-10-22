@@ -9,7 +9,7 @@ run_phase() {
     local label=$1 class=$2 argument=$3 value=$4
     "${adb_cmd[@]}" shell am instrument -w -e class "$class" -e "$argument" "$value" \
         -e screenshotDedicatedEmulator true -e readerInteractionsScreenshots 1 \
-        com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log" || return 1
+        "com.fluxa.app.debug.test/${FLUXA_DEVICE_TEST_RUNNER:-androidx.test.runner.AndroidJUnitRunner}" | tee "$reports/$label.log" || return 1
     if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then return 1; fi
     grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
 }

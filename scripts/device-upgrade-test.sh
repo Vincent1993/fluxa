@@ -32,7 +32,7 @@ run_tests() {
     local label=$1
     shift
     "${adb_cmd[@]}" shell am instrument -w "$@" \
-        com.fluxa.app.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$reports/$label.log"
+        "com.fluxa.app.debug.test/${FLUXA_DEVICE_TEST_RUNNER:-androidx.test.runner.AndroidJUnitRunner}" | tee "$reports/$label.log"
     # Android's instrumentation command can exit zero even when JUnit fails.
     if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then
         echo 'Skipped instrumentation tests are not accepted.' >&2; exit 1
@@ -51,6 +51,35 @@ run_tests upgrade-seed -e class com.fluxa.app.UpgradePreservationTest -e fluxa.u
 "${adb_cmd[@]}" shell dumpsys package com.fluxa.app.debug |
     grep -E 'versionCode=|versionName=' > "$reports/after-package.txt"
 run_tests upgrade-verify -e class com.fluxa.app.UpgradePreservationTest -e fluxa.upgrade verify
+# This fresh emulator owns no user accessibility configuration. The test APK
+# contains a real client so Chromium observes a connected reader across reloads;
+# ordinary UiAutomation suppresses services and can leave a title-only document.
+# Never install this fixture into the application APK or alter an existing setup.
+prior_services=$("${adb_cmd[@]}" shell settings get secure enabled_accessibility_services | tr -d '\r')
+prior_accessibility=$("${adb_cmd[@]}" shell settings get secure accessibility_enabled | tr -d '\r')
+[[ -z "$prior_services" || "$prior_services" = null ]] || {
+    echo 'Existing accessibility services found; preserve them and use a fresh emulator.' >&2; exit 1;
+}
+restore_accessibility() {
+    local status=$?
+    trap - EXIT
+    if [[ "$prior_services" = null ]]; then
+        "${adb_cmd[@]}" shell settings delete secure enabled_accessibility_services || status=1
+    else
+        "${adb_cmd[@]}" shell settings put secure enabled_accessibility_services "''" || status=1
+    fi
+    if [[ "$prior_accessibility" = null ]]; then
+        "${adb_cmd[@]}" shell settings delete secure accessibility_enabled || status=1
+    else
+        "${adb_cmd[@]}" shell settings put secure accessibility_enabled "$prior_accessibility" || status=1
+    fi
+    exit "$status"
+}
+trap restore_accessibility EXIT
+"${adb_cmd[@]}" shell settings put secure enabled_accessibility_services \
+    com.fluxa.app.debug.test/com.fluxa.app.ReaderAccessibilityService
+"${adb_cmd[@]}" shell settings put secure accessibility_enabled 1
+export FLUXA_DEVICE_TEST_RUNNER=com.fluxa.app.ReaderAccessibilityRunner
 "${adb_cmd[@]}" shell settings put system accelerometer_rotation 0
 "${adb_cmd[@]}" shell settings put system user_rotation 0
 "${adb_cmd[@]}" shell settings put system font_scale 1.0

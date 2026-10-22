@@ -48,7 +48,8 @@ internal fun nativeWebText(
 internal data class NativeWebParagraph(
     val text: String,
     val visible: Boolean,
-    val unclippedScreenBounds: Rect?
+    val unclippedScreenBounds: Rect?,
+    val requestedScreenBounds: Rect?
 )
 
 /** Synchronization only: never repeats a click or retries a flow. */
@@ -518,7 +519,7 @@ internal class DeviceFlowSync(
     fun accessibilityText(visibleOnly: Boolean = false): List<String> =
         accessibilityParagraphs().filter { !visibleOnly || it.visible }.map { it.text }
 
-    fun accessibilityParagraphs(): List<NativeWebParagraph> {
+    fun accessibilityParagraphs(substring: String? = null): List<NativeWebParagraph> {
         val automation = readerUiAutomation()
         // A theme reload reuses the WebView host with a new native document. Root
         // refresh alone can retain old virtual-child IDs in UiAutomation's cache.
@@ -541,13 +542,42 @@ internal class DeviceFlowSync(
                 // an Assist snapshot can interfere with it during document changes.
                 // Missing geometry stays missing: clipped bounds cannot prove that
                 // the complete paragraph is visible.
-                val keys = listOf("Left", "Top", "Right", "Bottom")
-                    .map { "AccessibilityNodeInfo.unclipped$it" }
-                val full = if (keys.all(node.extras::containsKey)) Rect(
-                    node.extras.getInt(keys[0]), node.extras.getInt(keys[1]),
-                    node.extras.getInt(keys[2]), node.extras.getInt(keys[3])) else null
+                fun fullBounds(): Rect? {
+                    val keys = listOf("Left", "Top", "Right", "Bottom")
+                        .map { "AccessibilityNodeInfo.unclipped$it" }
+                    return if (keys.all(node.extras::containsKey)) Rect(
+                        node.extras.getInt(keys[0]), node.extras.getInt(keys[1]),
+                        node.extras.getInt(keys[2]), node.extras.getInt(keys[3])) else null
+                }
+                val full = fullBounds()
+                var requested = full
+                if (substring != null && text.contains(substring) && text != substring) {
+                    // A code node can include long, horizontally scrollable lines.
+                    // Prove the requested text itself, not a clipped container or
+                    // unrelated later lines, using native per-character locations.
+                    val key = android.view.accessibility.AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY
+                    val start = text.indexOf(substring)
+                    val characters = mutableListOf<Rect>()
+                    if (key in node.availableExtraData) for (offset in substring.indices) {
+                        val args = android.os.Bundle().apply {
+                            putInt(android.view.accessibility.AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, start + offset)
+                            putInt(android.view.accessibility.AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, 1)
+                        }
+                        if (!node.refreshWithExtraData(key, args) || node.text?.toString() != text) break
+                        @Suppress("DEPRECATION")
+                        val data = node.extras.getParcelableArray(key)
+                        // Chromium also provides the unclipped bounds for this
+                        // one-character request; clipped glyphs cannot pass.
+                        val glyph = fullBounds()
+                        if (data == null || data.size != 1 || data[0] !is android.graphics.RectF || glyph == null || glyph.isEmpty) break
+                        characters += glyph
+                    }
+                    requested = if (characters.size == substring.length) Rect().apply {
+                        characters.forEach { union(it) }
+                    } else null
+                }
                 result += NativeWebParagraph(text,
-                    nativeWebText(node, webBounds, visibleOnly = true) != null, full)
+                    nativeWebText(node, webBounds, visibleOnly = true) != null, full, requested)
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let { child ->
                 try { result += collect(child, viewport) }

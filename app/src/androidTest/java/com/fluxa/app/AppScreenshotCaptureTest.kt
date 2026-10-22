@@ -461,7 +461,7 @@ class AppScreenshotCaptureTest {
                     sync.step("landscape reader body and visible caption") {
                         sync.reader(titles[0])
                         // Rotation creates a new native document. Establish its visual
-                        // commit and real accessibility body before Assist sampling,
+                        // commit and real accessibility body before geometry sampling,
                         // just as on initial entry and after a palette change.
                         sync.body(intro)
                         shot("23-reader-landscape.png", "真实横屏阅读：插画与图注", reader,
@@ -522,13 +522,19 @@ class AppScreenshotCaptureTest {
                 val origin = IntArray(2).also(web::getLocationOnScreen)
                 viewport.set(origin[0], origin[1], origin[0] + width, origin[1] + height)
             }
-            val entries = sync.accessibilityParagraphs()
-            val target = checkNotNull(entries.filter { it.text.contains(needle) &&
-                it.unclippedScreenBounds?.let { b -> b.width() > 1 && b.height() > 1 } == true }
-                .minByOrNull { checkNotNull(it.unclippedScreenBounds).height() }) {
-                "Actual native paragraph missing: $needle"
+            var entries = emptyList<NativeWebParagraph>()
+            var match: NativeWebParagraph? = null
+            sync.await {
+                // Character locations are supplied asynchronously by Chromium.
+                // Keep the same bounded wait and require actual native geometry.
+                entries = sync.accessibilityParagraphs(needle)
+                match = entries.filter { it.text.contains(needle) &&
+                    it.requestedScreenBounds?.let { b -> b.width() > 1 && b.height() > 1 } == true }
+                    .minByOrNull { checkNotNull(it.requestedScreenBounds).height() }
+                match != null
             }
-            val screenBounds = checkNotNull(target.unclippedScreenBounds)
+            val target = checkNotNull(match) { "Actual native text geometry missing: $needle" }
+            val screenBounds = checkNotNull(target.requestedScreenBounds)
             // Provider extras are un-clipped SCREEN pixels, already scrolled. Only
             // remove the host's screen origin; never subtract scrollY a second time.
             val bounds = android.graphics.Rect(screenBounds).apply { offset(-viewport.left, -viewport.top) }
@@ -536,6 +542,7 @@ class AppScreenshotCaptureTest {
             return JSONObject().put("progress", 100).put("width", width).put("height", height)
                 .put("contentHeight", content).put("scrollY", y).put("javascriptEnabled", false)
                 .put("matchedText", target.text).put("bounds", bounds.toShortString())
+                .put("requestedText", needle)
                 .put("geometrySource", "native-accessibility-unclipped-screen-bounds")
                 .put("visible", visible).put("visibleBody", JSONArray(entries.filter {
                     it.visible && it.unclippedScreenBounds?.let { b ->
