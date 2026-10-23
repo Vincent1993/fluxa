@@ -198,6 +198,7 @@ class ReaderMediaStage1cTest {
                 fun transform(): Triple<Float, Float, Float> {
                     var result: Triple<Float, Float, Float>? = null
                     androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(ZoomImageView::class.java))
+                        .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
                         .check { view, failure ->
                             if (failure != null) throw failure
                             val imageView = view as ZoomImageView
@@ -263,6 +264,7 @@ class ReaderMediaStage1cTest {
                 viewer.performTouchInput { swipe(Offset(width / 2f, height * .7f), Offset(width / 2f, height * .3f), 400) }
                 // Espresso inspects the actual native view in the dialog's separate window.
                 androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(ZoomImageView::class.java))
+                    .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
                     .check { view, failure ->
                         if (failure != null) throw failure
                         val imageView = view as ZoomImageView
