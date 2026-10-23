@@ -362,10 +362,15 @@ internal class DeviceFlowSync(
                 ready
             }
         } else {
-            await { accessibilityText().isNotEmpty() }
+            // A fresh renderer can publish the date/title before the article body.
+            // Readiness must wait for the requested prose at the restored viewport;
+            // a page header is not permission to scroll a still-loading document.
+            await { accessibilityText().any { it.contains(bodyText) } }
         }
         var moves = 0
-        while (accessibilityText().none { it.contains(bodyText) } && moves < 12) {
+        // Only the explicitly numbered long fixtures need heading navigation.
+        // Ordinary body readiness (reopen/theme/rotation) must not change position.
+        while (paragraphPattern != null && accessibilityText().none { it.contains(bodyText) } && moves < 12) {
             // A short article can finish drawing before Chromium publishes its
             // accessible paragraphs. Await the exact body below instead of issuing
             // a boundary swipe (which could navigate to another article).
