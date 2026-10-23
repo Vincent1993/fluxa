@@ -254,7 +254,25 @@ internal class DeviceFlowSync(
         val node = compose.onNodeWithContentDescription(text)
         scrollControlIntoView(compose, scenario, node)
         settled(node)
-        node.performTouchInput { click() }
+        // This flow crosses native screenshots/IME calls. Use screen coordinates
+        // and the Android input queue, as the reader's native gesture tests do.
+        // The subsequent screen assertion still verifies the actual navigation.
+        val target = node.assertIsEnabled().fetchSemanticsNode()
+        val center = compose.runOnIdle {
+            target.positionOnScreen + androidx.compose.ui.geometry.Offset(
+                target.size.width / 2f, target.size.height / 2f)
+        }
+        check(center.x.isFinite() && center.y.isFinite())
+        val automation = readerUiAutomation()
+        val down = android.os.SystemClock.uptimeMillis()
+        for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
+            val event = android.view.MotionEvent.obtain(down, android.os.SystemClock.uptimeMillis(),
+                action, center.x, center.y, 0).apply { source = android.view.InputDevice.SOURCE_TOUCHSCREEN }
+            try {
+                check(automation.injectInputEvent(event, true)) { "Android rejected $text action=$action at $center" }
+            } finally { event.recycle() }
+        }
+        Log.i("FluxaDeviceFlow", "Native tap $text at $center; awaiting actual destination")
     }
 
     fun article(title: String, click: Boolean) = step("scroll to fixture${if (click) " and touch" else " after back"}") {

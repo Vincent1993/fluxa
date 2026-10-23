@@ -16,12 +16,20 @@ import org.junit.Test
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Failure-only causal control: native WebView, no Fluxa reader, Compose, Assist or app stores.
- * Its outcome never replaces the original acceptance failure or permits publication.
+/** Native control: no Fluxa reader, Compose, Assist or app stores.
+ * Run each path in a fresh instrumentation process so reload failure cannot skip replacement.
  */
 class NativeWebViewPublicationProbeTest {
-    @Test fun inlineDocumentsPublishBodyAcrossReloadAndHostReplacement() {
-        check(InstrumentationRegistry.getArguments().getString("readerAccessibilityService") == "true")
+    @Test fun inlineReloadPublishesBody() = verifyDocuments(replaceHost = false)
+    @Test fun replacementPublishesBody() = verifyDocuments(replaceHost = true)
+
+    private fun verifyDocuments(replaceHost: Boolean) {
+        val args = InstrumentationRegistry.getArguments()
+        val service = args.getString("readerAccessibilityService")
+        check(service in listOf("true", "false"))
+        val label = checkNotNull(args.getString("nativeControlLabel"))
+        check(label.matches(Regex("[a-z0-9-]+")))
+        Log.i(TAG, "control=$label preserveRealService=$service replaceHost=$replaceHost")
         val automation = readerUiAutomation()
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.awaitStableHost()
@@ -32,13 +40,13 @@ class NativeWebViewPublicationProbeTest {
                 activity.setContentView(root)
             }
             try {
-                // Alternating reload and host replacement reproduces both document paths.
+                // Same HTML and observer for both paths; only native host reuse differs.
                 repeat(6) { document ->
                     val exact = "NATIVE-CONTROL-$document Real paragraph from the displayed inline document."
                     val url = "https://www.newsblur.com/native-publication-control/$document/"
                     val drawn = AtomicBoolean(false)
                     scenario.onActivity { activity ->
-                        if (document % 2 == 0) {
+                        if (document == 0 || replaceHost) {
                             web?.let { root.removeView(it); it.stopLoading(); it.destroy() }
                             web = WebView(activity).apply {
                                 settings.javaScriptEnabled = false
@@ -78,7 +86,7 @@ class NativeWebViewPublicationProbeTest {
                             </head><body><header><p>Owned metadata</p><h1>Native control $document</h1></header>
                             <main><h2>Owned body</h2><p>$exact</p><p>Second owned paragraph.</p></main>
                             </body></html>""".trimIndent(), "text/html", "utf-8", url)
-                        Log.i(TAG, "api=${Build.VERSION.SDK_INT} provider=${WebView.getCurrentWebViewPackage()?.versionName} document=$document host=${System.identityHashCode(current)} mode=${if (document % 2 == 0) "new-host" else "reload"}")
+                        Log.i(TAG, "control=$label api=${Build.VERSION.SDK_INT} provider=${WebView.getCurrentWebViewPackage()?.versionName} document=$document host=${System.identityHashCode(current)} mode=${if (document == 0 || replaceHost) "new-host" else "reload"}")
                     }
                     await("visual commit $document") { drawn.get() }
                     var lastTree = "not sampled"
@@ -116,7 +124,7 @@ class NativeWebViewPublicationProbeTest {
                         val bitmap = checkNotNull(automation.takeScreenshot())
                         try {
                             File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
-                                "native-webview-control-failure.png").outputStream().use {
+                                "native-webview-$label-failure.png").outputStream().use {
                                 check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                             }
                         } finally { bitmap.recycle() }

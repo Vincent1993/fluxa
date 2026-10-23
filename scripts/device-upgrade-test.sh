@@ -52,15 +52,35 @@ run_tests() {
     grep -E '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
 }
 native_reader_control() {
-    timeout 90s "${adb_cmd[@]}" shell am instrument -w \
-        -e class com.fluxa.app.NativeWebViewPublicationProbeTest \
-        -e readerAccessibilityService true \
-        "com.fluxa.app.debug.test/$FLUXA_DEVICE_TEST_RUNNER" \
-        > "$reports/native-webview-control.log" 2>&1 || true
-    if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f files/native-webview-control-failure.png; then
-        "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat files/native-webview-control-failure.png \
-            > "$reports/native-webview-control-failure.png" || true
-    fi
+    native_reader_matrix failure false
+}
+native_reader_matrix() {
+    local provider=$1 required=$2 failed=0 service path method label
+    for service in false true; do
+        for path in reload replacement; do
+            method=inlineReloadPublishesBody
+            [[ "$path" != replacement ]] || method=replacementPublishesBody
+            label="$provider-service-$service-$path"
+            # A fresh process per case prevents a failed reload from skipping the
+            # host replacement comparison. Only the observer flag changes here.
+            timeout 90s "${adb_cmd[@]}" shell am instrument -w \
+                -e class "com.fluxa.app.NativeWebViewPublicationProbeTest#$method" \
+                -e readerAccessibilityService "$service" -e nativeControlLabel "$label" \
+                "com.fluxa.app.debug.test/$FLUXA_DEVICE_TEST_RUNNER" \
+                > "$reports/native-webview-$label.log" 2>&1 || failed=1
+            if ! grep -Eq '^OK \(1 test\)' "$reports/native-webview-$label.log" || \
+                grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/native-webview-$label.log"; then
+                failed=1
+            fi
+            if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/native-webview-$label-failure.png"; then
+                "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/native-webview-$label-failure.png" \
+                    > "$reports/native-webview-$label-failure.png" || true
+            fi
+        done
+    done
+    printf 'provider=%s required=%s failed=%s\n' "$provider" "$required" "$failed" \
+        | tee -a "$reports/native-webview-comparison.txt"
+    [[ "$required" = false || "$failed" = 0 ]]
 }
 "${adb_cmd[@]}" install --no-streaming "$old_apk"
 "${adb_cmd[@]}" install --no-streaming "$old_test"
@@ -107,6 +127,13 @@ export FLUXA_READER_ACCESSIBILITY=true
 "${adb_cmd[@]}" shell settings put system accelerometer_rotation 0
 "${adb_cmd[@]}" shell settings put system user_rotation 0
 "${adb_cmd[@]}" shell settings put system font_scale 1.0
+if [[ -n "${FLUXA_WEBVIEW_PROVIDER_DIR:-}" ]]; then
+    native_reader_matrix image false
+    bash scripts/device-webview-provider.sh install "$FLUXA_WEBVIEW_PROVIDER_DIR" "$reports"
+    native_reader_matrix updated true
+else
+    native_reader_matrix image true
+fi
 run_tests complete-device-suite -e class "$(paste -sd, scripts/device-ci-classes.txt)" \
     -e expectedOrientation portrait -e expectedFontScale 1.0
 if ! bash scripts/device-ci-capture.sh "$reports"; then
