@@ -40,9 +40,27 @@ run_tests() {
     if grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)' "$reports/$label.log"; then
         echo 'Skipped instrumentation tests are not accepted.' >&2; exit 1
     fi
-    grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
+    if ! grep -Eq '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"; then
+        # Preserve the original failure. A separate native-only control identifies
+        # provider failures without retrying the app flow or changing release gates.
+        if grep -Fq 'cached WebView body ready' "$reports/$label.log"; then
+            native_reader_control
+        fi
+        return 1
+    fi
     printf '%s: ' "$label"
     grep -E '^OK \([1-9][0-9]* tests?\)' "$reports/$label.log"
+}
+native_reader_control() {
+    timeout 90s "${adb_cmd[@]}" shell am instrument -w \
+        -e class com.fluxa.app.NativeWebViewPublicationProbeTest \
+        -e readerAccessibilityService true \
+        "com.fluxa.app.debug.test/$FLUXA_DEVICE_TEST_RUNNER" \
+        > "$reports/native-webview-control.log" 2>&1 || true
+    if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f files/native-webview-control-failure.png; then
+        "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat files/native-webview-control-failure.png \
+            > "$reports/native-webview-control-failure.png" || true
+    fi
 }
 "${adb_cmd[@]}" install --no-streaming "$old_apk"
 "${adb_cmd[@]}" install --no-streaming "$old_test"
@@ -91,7 +109,13 @@ export FLUXA_READER_ACCESSIBILITY=true
 "${adb_cmd[@]}" shell settings put system font_scale 1.0
 run_tests complete-device-suite -e class "$(paste -sd, scripts/device-ci-classes.txt)" \
     -e expectedOrientation portrait -e expectedFontScale 1.0
-bash scripts/device-ci-capture.sh "$reports"
+if ! bash scripts/device-ci-capture.sh "$reports"; then
+    if grep -Fq 'cached WebView body ready' "$reports/screenshot-capture.log" \
+        "$reports/reader-interactions-verify.log" 2>/dev/null; then
+        native_reader_control
+    fi
+    exit 1
+fi
 for name in validation-login.png validation-reader.png validation-cache.png; do
     # Screenshots are optional diagnostics; JUnit and upgrade assertions above are mandatory.
     if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/$name"; then

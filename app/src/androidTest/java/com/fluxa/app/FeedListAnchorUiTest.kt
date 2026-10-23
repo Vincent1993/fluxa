@@ -35,7 +35,8 @@ class FeedListAnchorUiTest {
     private fun assertStableBounds(text: String, expected: Rect) {
         repeat(3) {
             compose.waitForIdle()
-            val actual = title(text).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val node = title(text).assertIsDisplayed().fetchSemanticsNode()
+            val actual = compose.runOnIdle { node.boundsInRoot }
             assertTrue("Expected $expected, got $actual", listOf(
                 actual.left - expected.left, actual.top - expected.top,
                 actual.right - expected.right, actual.bottom - expected.bottom
@@ -77,19 +78,22 @@ class FeedListAnchorUiTest {
         // chip: a partial header must show its tail, not necessarily its first row.
         compose.onNodeWithContentDescription("收藏").assertIsSelected()
         val tailLabel = ArticleFilter.entries.last().label
-        val filterBeforeTop = compose.onNodeWithContentDescription(tailLabel)
-            .fetchSemanticsNode().positionInRoot.y
+        val initialFilter = compose.onNodeWithContentDescription(tailLabel).fetchSemanticsNode()
+        val filterBeforeTop = compose.runOnIdle { initialFilter.positionInRoot.y }
         // Establish the partial-header anchor before looking up a possibly uncomposed row.
         // This is initial setup only; never scroll to repair the position on return.
         list.performScrollToIndex(1)
         compose.waitForIdle()
-        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val initialList = list.fetchSemanticsNode()
         val row = compose.onNode(hasTestTag("article-swipe") and hasText("owned 0"))
         // size is the layout's UNCLIPPED height, unlike boundsInRoot in a short window.
-        val rowHeight = row.fetchSemanticsNode().size.height.toFloat()
+        val initialRow = row.fetchSemanticsNode()
+        val (initialViewport, rowHeight) = compose.runOnIdle {
+            initialList.boundsInRoot to initialRow.size.height.toFloat()
+        }
         val margin = with(compose.density) { 4.dp.toPx() }
         val headerTail = minOf(with(compose.density) { 48.dp.toPx() },
-            viewport.height - rowHeight - margin).toInt().toFloat()
+            initialViewport.height - rowHeight - margin).toInt().toFloat()
         // The header ends with 12dp padding: require actual filter pixels above it.
         assertTrue("Viewport must fit the whole row and a visible filter tail",
             rowHeight > 0f && headerTail > with(compose.density) { 12.dp.toPx() } + 2f)
@@ -97,16 +101,25 @@ class FeedListAnchorUiTest {
             assertTrue(scrollBy(0f, -headerTail))
         }
         compose.waitForIdle()
+        val listNode = list.fetchSemanticsNode()
         val rowNode = row.assertIsDisplayed().fetchSemanticsNode()
-        val rowBounds = rowNode.boundsInRoot
         val titleNode = title("owned 0").assertIsDisplayed().fetchSemanticsNode()
-        val before = titleNode.boundsInRoot
-        val source = compose.onAllNodesWithTag("article-source", useUnmergedTree = true)[0]
-            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val filter = compose.onNodeWithContentDescription(tailLabel)
-            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val date = compose.onAllNodesWithTag("article-date", useUnmergedTree = true)[0]
-            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val sourceNode = compose.onAllNodesWithTag("article-source", useUnmergedTree = true)[0]
+            .assertIsDisplayed().fetchSemanticsNode()
+        val filterNode = compose.onNodeWithContentDescription(tailLabel)
+            .assertIsDisplayed().fetchSemanticsNode()
+        val dateNode = compose.onAllNodesWithTag("article-date", useUnmergedTree = true)[0]
+            .assertIsDisplayed().fetchSemanticsNode()
+        // SemanticsNode coordinates are live layout reads, not a snapshot at fetch time.
+        // Sample parent/child geometry together on the UI thread after the initial scroll.
+        // Comparing a pre-scroll viewport with independently sampled child frames can
+        // diagnose impossible containment while the list is settling.
+        val frame = compose.runOnIdle {
+            AnchorFrame(listNode.boundsInRoot, rowNode.boundsInRoot, titleNode.boundsInRoot,
+                sourceNode.boundsInRoot, filterNode.boundsInRoot, dateNode.boundsInRoot,
+                rowNode.size.height.toFloat(), titleNode.size.height.toFloat())
+        }
+        val (viewport, rowBounds, before, source, filter, date) = frame
         // Positive scroll AND a still-visible piece of item 0 proves this is a
         // partial header anchor, not an article-index anchor or an unscrolled list.
         assertTrue("Header must have scrolled", filter.top < filterBeforeTop - 2f)
@@ -115,9 +128,10 @@ class FeedListAnchorUiTest {
         assertTrue("Source follows the visible header", source.top >= filter.bottom)
         assertTrue("Entire article is in viewport",
             rowBounds.top >= viewport.top && rowBounds.bottom <= viewport.bottom)
-        assertEquals("Article must not be clipped", rowNode.size.height.toFloat(), rowBounds.height, 0f)
-        assertTrue(before.top >= viewport.top && before.bottom <= viewport.bottom)
-        assertEquals("Title must not be clipped", titleNode.size.height.toFloat(), before.height, 0f)
+        assertEquals("Article must not be clipped: $frame", frame.rowHeight, rowBounds.height, 0f)
+        assertTrue("Title must fit viewport: $frame",
+            before.top >= viewport.top && before.bottom <= viewport.bottom)
+        assertEquals("Title must not be clipped: $frame", frame.titleHeight, before.height, 0f)
         assertStableBounds("owned 0", before)
         row.performClick()
         compose.waitForIdle()
@@ -142,11 +156,17 @@ class FeedListAnchorUiTest {
         list.performScrollToIndex(4)
         compose.waitForIdle()
         val later = compose.onNode(hasTestTag("article-swipe") and hasText("owned 3"))
-        val laterBounds = title("owned 3").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val laterTitle = title("owned 3").assertIsDisplayed().fetchSemanticsNode()
+        val laterBounds = compose.runOnIdle { laterTitle.boundsInRoot }
         val read = later.fetchSemanticsNode().config[SemanticsActions.CustomActions]
             .single { it.label == "标记已读" }
         compose.runOnIdle { assertTrue(read.action()) }
         assertStableBounds("owned 3", laterBounds)
         compose.runOnIdle { assertTrue(state.articles[3].isRead) }
     }
+
+    private data class AnchorFrame(
+        val viewport: Rect, val row: Rect, val title: Rect, val source: Rect,
+        val filter: Rect, val date: Rect, val rowHeight: Float, val titleHeight: Float
+    )
 }
