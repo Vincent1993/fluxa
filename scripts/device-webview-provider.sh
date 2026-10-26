@@ -11,28 +11,29 @@ mode=$1 provider=$2 reports=$3
 adb="$ANDROID_HOME/platform-tools/adb"
 signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 aapt="$ANDROID_HOME/build-tools/36.0.0/aapt"
+analyzer="$ANDROID_HOME/cmdline-tools/22.0/bin/apkanalyzer"
 mkdir -p "$reports"
 certificate() { "$signer" verify --print-certs "$1" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p'; }
 
 if [[ "$mode" = prepare ]]; then
     [[ ! -e "$provider" ]] || { echo 'Provider directory already exists.' >&2; exit 1; }
     mkdir -p "$provider"
-    image="$ANDROID_HOME/system-images/android-37.0/google_apis_ps16k/x86_64"
+    image="$ANDROID_HOME/system-images/android-37.2/google_apis_ps16k/x86_64"
     cp "$image/package.xml" "$reports/webview-source-image.xml"
     python3 - "$image/package.xml" <<'PY'
 import sys, xml.etree.ElementTree as E
 root = E.parse(sys.argv[1]).getroot()
 package = next(p for p in root.iter() if p.tag.endswith('localPackage'))
-assert package.attrib['path'] == 'system-images;android-37.0;google_apis_ps16k;x86_64'
+assert package.attrib['path'] == 'system-images;android-37.2;google_apis_ps16k;x86_64'
 revision = next(p for p in package if p.tag.endswith('revision'))
-assert next(p.text for p in revision if p.tag.endswith('major')) == '8'
+assert next(p.text for p in revision if p.tag.endswith('major')) == '6'
 PY
     donor_user="$RUNNER_TEMP/fluxa-webview-source-android"
     donor_avd="$donor_user/avd"
     mkdir -p "$donor_avd"
     ANDROID_USER_HOME="$donor_user" ANDROID_AVD_HOME="$donor_avd" \
         "$ANDROID_HOME/cmdline-tools/22.0/bin/avdmanager" create avd \
-        --name fluxa-webview-source --package 'system-images;android-37.0;google_apis_ps16k;x86_64' \
+        --name fluxa-webview-source --package 'system-images;android-37.2;google_apis_ps16k;x86_64' \
         --device pixel_2 --path "$donor_avd/fluxa-webview-source.avd" <<< no
     printf 'hw.cpu.ncore=2\nhw.ramSize=2048\nhw.keyboard=no\n' >> "$donor_avd/fluxa-webview-source.avd/config.ini"
     "$adb" start-server
@@ -56,18 +57,18 @@ PY
         gzip -dc "$provider/$name.apk.gz" > "$provider/$name.apk"
         "$signer" verify "$provider/$name.apk"
         "$aapt" dump badging "$provider/$name.apk" > "$reports/webview-$name-badging.txt"
+        "$analyzer" manifest print "$provider/$name.apk" > "$reports/webview-$name-manifest.xml"
+        certificate "$provider/$name.apk" > "$reports/webview-$name-certificate.txt"
     done
-    grep -F "package: name='com.google.android.webview'" "$reports/webview-WebViewGoogle-badging.txt"
-    grep -F "versionName='145.0.7632.218'" "$reports/webview-WebViewGoogle-badging.txt"
-    grep -E "sdkVersion:'([0-9]|[12][0-9]|3[0-6])'" "$reports/webview-WebViewGoogle-badging.txt"
-    web_cert=$(certificate "$provider/WebViewGoogle.apk")
-    [[ -n "$web_cert" && "$web_cert" = "$(certificate "$provider/TrichromeLibrary.apk")" ]]
-    printf '%s\n' "$web_cert" > "$reports/webview-provider-certificate.txt"
+    # Separate packages need not share a signer. A Trichrome consumer declares
+    # the library name, version and certificate it trusts in its manifest.
+    python3 scripts/webview_provider.py "$reports" | tee "$reports/webview-provider.json"
     (cd "$provider" && sha256sum WebViewGoogle.apk TrichromeLibrary.apk > SHA256SUMS)
     cp "$provider/SHA256SUMS" "$reports/webview-provider-SHA256SUMS"
 elif [[ "$mode" = install ]]; then
     [[ "${ANDROID_SERIAL:-}" = emulator-5554 ]] || exit 1
-    [[ "$("$adb" -s "$ANDROID_SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')" = 36 ]] || exit 1
+    api=$("$adb" -s "$ANDROID_SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')
+    [[ "$api" = 36 || "$api" = 37 ]] || exit 1
     (cd "$provider" && sha256sum -c SHA256SUMS)
     "$adb" -s "$ANDROID_SERIAL" shell dumpsys webviewupdate > "$reports/webview-before-update.txt"
     mapfile -t paths < <("$adb" -s "$ANDROID_SERIAL" shell pm path com.google.android.webview | tr -d '\r' | sed 's/^package://')
@@ -78,10 +79,15 @@ elif [[ "$mode" = install ]]; then
         echo 'Provider signatures differ; refusing replacement.' >&2; exit 1;
     }
     # Standard Android signature/version/dependency validation stays enabled.
-    "$adb" -s "$ANDROID_SERIAL" install --no-streaming "$provider/TrichromeLibrary.apk"
+    if [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["trichrome_required"])' \
+            "$reports/webview-provider.json")" = True ]]; then
+        "$adb" -s "$ANDROID_SERIAL" install --no-streaming "$provider/TrichromeLibrary.apk"
+    fi
     "$adb" -s "$ANDROID_SERIAL" install --no-streaming -r "$provider/WebViewGoogle.apk"
     "$adb" -s "$ANDROID_SERIAL" shell dumpsys webviewupdate > "$reports/webview-after-update.txt"
-    grep -F 'Current WebView package (name, version): (com.google.android.webview, 145.0.7632.218)' \
+    version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["webview_version"])' \
+        "$reports/webview-provider.json")
+    grep -F "Current WebView package (name, version): (com.google.android.webview, $version)" \
         "$reports/webview-after-update.txt"
 else
     echo 'Unsupported provider operation.' >&2; exit 1

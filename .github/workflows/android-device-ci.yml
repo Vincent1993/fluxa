@@ -61,10 +61,8 @@ jobs:
             "cmdline-tools;22.0" "platforms;android-35" "build-tools;34.0.0" \
             "platforms;android-37.0" "build-tools;36.0.0" "emulator" "platform-tools" \
             "system-images;android-$TEST_API;$TEST_TAG;x86_64"
-          if [[ "$TEST_API" = 36 ]]; then
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-              'system-images;android-37.0;google_apis_ps16k;x86_64'
-          fi
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            'system-images;android-37.2;google_apis_ps16k;x86_64'
       - name: Build old and new APKs with the same ephemeral test certificate
         run: |
           git worktree add --detach ../fluxa-upgrade-baseline b61c6d97995dd79f3c2ff549da28a6f802471d77
@@ -73,8 +71,7 @@ jobs:
           (cd ../fluxa-upgrade-baseline && FLUXA_BUILD_COMMIT=b61c6d97995dd79f3c2ff549da28a6f802471d77 \
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace)
           ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
-      - name: Read signed WebView 145 from the official SDK image for API 36 comparison
-        if: matrix.api == '36'
+      - name: Read signed WebView from the pinned official SDK image for provider comparison
         timeout-minutes: 12
         run: |
           provider="$RUNNER_TEMP/fluxa-webview-provider"
