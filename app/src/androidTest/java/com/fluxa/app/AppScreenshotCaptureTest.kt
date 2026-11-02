@@ -293,7 +293,8 @@ class AppScreenshotCaptureTest {
                         val text = RenderedTextProbe.Text(proof.getString("matchedText"),
                             android.graphics.Rect(b.getInt(0), b.getInt(1), b.getInt(2), b.getInt(3)),
                             proof.getInt("textColor"))
-                        proof.put("textInkPixels", RenderedTextProbe.inkPixels(bitmap, text))
+                        proof.put("textInkPixels", RenderedTextProbe.inkPixels(bitmap, text,
+                            proof.optDouble("paintOpacity", 1.0).toFloat()))
                     }
                     File(output, name).outputStream().use {
                         check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
@@ -411,12 +412,12 @@ class AppScreenshotCaptureTest {
                 shot("13-reader-hero.png", "18px / 1.8 浅色：标题、引言与河岸插画", reader,
                     reveal(sync, scenario, intro, move = false))
                 touch("收藏"); sync.settled(compose.onNodeWithContentDescription("取消收藏"))
-                shot("14-reader-image.png", "原创河岸插画与图注", reader, reveal(sync, scenario, caption, .85f))
+                shot("14-reader-image.png", "原创河岸插画与图注", reader, reveal(sync, scenario, caption, .85f, paintOpacity = .75f))
                 shot("15-reader-quote.png", "慢读章节与引文", reader, reveal(sync, scenario, quote, .35f))
                 shot("16-reader-code-table.png", "阅读笔记代码与观察表格", reader,
                     reveal(sync, scenario, "val afternoon", .18f, fragment = true))
                 shot("17-reader-second-image.png", "第二幅窗边插画与正文", reader,
-                    reveal(sync, scenario, secondCaption, .7f))
+                    reveal(sync, scenario, secondCaption, .7f, paintOpacity = .75f))
                 shot("18-reader-closing.png", "长文结尾与阅读留白", reader, reveal(sync, scenario, closing, .6f))
                 icon("阅读设置")
                 text("字号 18").assertExists()
@@ -482,7 +483,7 @@ class AppScreenshotCaptureTest {
                         // just as on initial entry and after a palette change.
                         sync.renderedBody(intro)
                         shot("23-reader-landscape.png", "真实横屏阅读：插画与图注", reader,
-                            reveal(sync, scenario, secondCaption, .7f))
+                            reveal(sync, scenario, secondCaption, .7f, paintOpacity = .75f))
                     }
                 } catch (failure: Throwable) {
                     // The outer flow records again after finally restores portrait.
@@ -526,7 +527,8 @@ class AppScreenshotCaptureTest {
      * change the viewport. The inventory records progress/dimensions and actual visible prose.
      */
     private fun reveal(sync: DeviceFlowSync, scenario: ActivityScenario<MainActivity>, needle: String,
-        fraction: Float = .3f, move: Boolean = true, fragment: Boolean = false): JSONObject {
+        fraction: Float = .3f, move: Boolean = true, fragment: Boolean = false,
+        paintOpacity: Float = 1f): JSONObject {
         fun sample(): Pair<JSONObject, Float> {
             if (!fragment) {
                 val document = sync.renderedDocument()
@@ -540,7 +542,8 @@ class AppScreenshotCaptureTest {
                     .put("javascriptEnabled", false).put("matchedText", target.text).put("requestedText", needle)
                     .put("bounds", bounds.toShortString()).put("screenBounds", JSONArray(listOf(
                         target.screenBounds.left, target.screenBounds.top, target.screenBounds.right, target.screenBounds.bottom)))
-                    .put("textColor", target.color).put("geometrySource", "public-assist-normalized-screen-bounds")
+                    .put("textColor", target.color).put("paintOpacity", paintOpacity)
+                    .put("geometrySource", "public-assist-normalized-screen-bounds")
                     .put("providerGeometry", target.geometry)
                     .put("visible", document.visible(needle) != null)
                     .put("nativeRenderedTextMatched", true)

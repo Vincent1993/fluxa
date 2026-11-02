@@ -342,10 +342,15 @@ class ReaderInteractionsDeviceTest {
                     val distance = deep * .75f + slop
                     val end = start + Offset(if (left) -distance else distance, 0f)
                     check(start.x > leftEdge && start.x < width - rightEdge && end.x > 0 && end.x < width)
-                    down(start); moveTo(end, 600)
+                    // moveTo's second argument is a delay before ONE event. A 600ms
+                    // stationary DOWN can invoke combinedClickable's long press.
+                    // Cross slop promptly with a continuous stream, then hold for preview.
+                    down(start)
+                    for (step in 1..12) moveTo(start + (end - start) * (step / 12f), 16)
                 }
                 var released = false
                 try {
+                    compose.onNodeWithContentDescription("关闭文章操作").assertDoesNotExist()
                     val preview = compose.onNodeWithTag("article-swipe-preview", useUnmergedTree = true)
                     sync.await { compose.onAllNodesWithTag("article-swipe-preview", useUnmergedTree = true)
                         .fetchSemanticsNodes().isNotEmpty() }

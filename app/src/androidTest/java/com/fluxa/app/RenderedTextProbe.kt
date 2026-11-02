@@ -82,16 +82,36 @@ internal object RenderedTextProbe {
     /** Complement exact renderer text + complete geometry with pixels from the captured frame.
      * Empty/background-only rectangles cannot prove visible text. Geometry must be screen pixels.
      */
-    fun inkPixels(bitmap: Bitmap, text: Text): Int {
+    fun inkPixels(bitmap: Bitmap, text: Text, paintOpacity: Float = 1f): Int {
         val bounds = text.screenBounds
         check(Rect(0, 0, bitmap.width, bitmap.height).contains(bounds) && !bounds.isEmpty)
         check(Color.alpha(text.color) > 0) { "Transparent text cannot prove visible prose" }
+        check(paintOpacity > 0f && paintOpacity <= 1f)
+        // Assist reports CSS text color before element opacity is composited. For
+        // the explicitly expected translucent caption style, verify its actual
+        // blended color against the captured uniform background, not a wider tolerance.
+        val expectedColor = if (paintOpacity == 1f) text.color else {
+            val colors = mutableMapOf<Int, Int>()
+            for (y in bounds.top until bounds.bottom) for (x in bounds.left until bounds.right) {
+                val pixel = bitmap.getPixel(x, y)
+                colors[pixel] = (colors[pixel] ?: 0) + 1
+            }
+            val background = checkNotNull(colors.maxByOrNull { it.value })
+            check(background.value >= bounds.width().toLong() * bounds.height() * .3) {
+                "Translucent prose requires a measurable uniform background"
+            }
+            fun blend(foreground: Int, behind: Int) =
+                kotlin.math.round(foreground * paintOpacity + behind * (1f - paintOpacity)).toInt()
+            Color.rgb(blend(Color.red(text.color), Color.red(background.key)),
+                blend(Color.green(text.color), Color.green(background.key)),
+                blend(Color.blue(text.color), Color.blue(background.key)))
+        }
         var ink = 0
         for (y in bounds.top until bounds.bottom) for (x in bounds.left until bounds.right) {
             val pixel = bitmap.getPixel(x, y)
-            if (kotlin.math.abs(Color.red(pixel) - Color.red(text.color)) <= 24 &&
-                kotlin.math.abs(Color.green(pixel) - Color.green(text.color)) <= 24 &&
-                kotlin.math.abs(Color.blue(pixel) - Color.blue(text.color)) <= 24) ink++
+            if (kotlin.math.abs(Color.red(pixel) - Color.red(expectedColor)) <= 24 &&
+                kotlin.math.abs(Color.green(pixel) - Color.green(expectedColor)) <= 24 &&
+                kotlin.math.abs(Color.blue(pixel) - Color.blue(expectedColor)) <= 24) ink++
         }
         // A solid fill is not text. Require glyph ink as well as non-ink in the same box.
         check(ink >= 12 && ink < bounds.width().toLong() * bounds.height() * .8) {

@@ -29,6 +29,8 @@ class RenderedTextProbeTest {
                     val body = "RENDERED-CONTROL-$index exact visible body."
                     val hidden = "HIDDEN-$index must not pass."
                     val offscreen = "OFFSCREEN-$index requires scrolling."
+                    val faded = "FADED-$index visible composited caption."
+                    val zeroOpacity = "ZERO-OPACITY-$index must not pass."
                     val loaded = AtomicBoolean()
                     scenario.onActivity { activity ->
                         // Cover both reload and native host replacement, plus a resized viewport.
@@ -55,6 +57,7 @@ class RenderedTextProbeTest {
                                 </head><body><p>$body</p><p style="display:none">$hidden</p>
                                 <p style="visibility:hidden">INVISIBLE-$index</p>
                                 <p style="color:transparent">TRANSPARENT-$index</p>
+                                <p style="opacity:.75">$faded</p><p style="opacity:0">$zeroOpacity</p>
                                 <div style="height:120vh"></div><p>$offscreen</p></body></html>
                             """.trimIndent(), "text/html", "utf-8", null)
                         }
@@ -77,7 +80,15 @@ class RenderedTextProbeTest {
                     assertNotNull("Offscreen prose must exist in renderer", document.exact(offscreen))
                     assertNull("Offscreen prose cannot count as visible", document.visible(offscreen))
                     val image = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-                    try { assertTrue(RenderedTextProbe.inkPixels(image, text) >= 12) }
+                    try {
+                        assertTrue(RenderedTextProbe.inkPixels(image, text) >= 12)
+                        val caption = checkNotNull(document.visible(faded))
+                        assertTrue(RenderedTextProbe.inkPixels(image, caption, .75f) >= 12)
+                        document.visible(zeroOpacity)?.let { invisible ->
+                            assertTrue("Zero opacity must not pass a nonzero expected opacity",
+                                runCatching { RenderedTextProbe.inkPixels(image, invisible, .75f) }.isFailure)
+                        }
+                    }
                     finally { image.recycle() }
                     val blank = Bitmap.createBitmap(maxOf(document.frame.width, text.screenBounds.right + 1),
                         maxOf(document.frame.height, text.screenBounds.bottom + 1), Bitmap.Config.ARGB_8888)
@@ -85,6 +96,8 @@ class RenderedTextProbeTest {
                         blank.eraseColor(Color.WHITE)
                         assertTrue("Blank output must fail despite valid renderer geometry",
                             runCatching { RenderedTextProbe.inkPixels(blank, text) }.isFailure)
+                        assertTrue("Blank output must also fail translucent text verification",
+                            runCatching { RenderedTextProbe.inkPixels(blank, text, .75f) }.isFailure)
                     } finally { blank.recycle() }
                     // A native control can set its own scroll position to validate the observer's
                     // transform. App screenshot framing still uses only real touch gestures.
