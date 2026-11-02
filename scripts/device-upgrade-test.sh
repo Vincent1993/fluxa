@@ -76,6 +76,10 @@ native_reader_matrix() {
                 "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/native-webview-$label-failure.png" \
                     > "$reports/native-webview-$label-failure.png" || true
             fi
+            if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/native-webview-$label-rendered-proof.png"; then
+                "${adb_cmd[@]}" exec-out run-as com.fluxa.app.debug cat "files/native-webview-$label-rendered-proof.png" \
+                    > "$reports/native-webview-$label-rendered-proof.png" || true
+            fi
         done
     done
     printf 'provider=%s required=%s failed=%s\n' "$provider" "$required" "$failed" \
@@ -127,13 +131,16 @@ export FLUXA_READER_ACCESSIBILITY=true
 "${adb_cmd[@]}" shell settings put system accelerometer_rotation 0
 "${adb_cmd[@]}" shell settings put system user_rotation 0
 "${adb_cmd[@]}" shell settings put system font_scale 1.0
+native_publication_failed=0
 if [[ -n "${FLUXA_WEBVIEW_PROVIDER_DIR:-}" ]]; then
     native_reader_matrix image false
     bash scripts/device-webview-provider.sh install "$FLUXA_WEBVIEW_PROVIDER_DIR" "$reports"
-    native_reader_matrix updated true
+    if ! native_reader_matrix updated true; then native_publication_failed=1; fi
 else
-    native_reader_matrix image true
+    if ! native_reader_matrix image true; then native_publication_failed=1; fi
 fi
+# Collect the independent app acceptance results even if the native provider control
+# failed. The original failure remains a mandatory release blocker below.
 run_tests complete-device-suite -e class "$(paste -sd, scripts/device-ci-classes.txt)" \
     -e expectedOrientation portrait -e expectedFontScale 1.0
 if ! bash scripts/device-ci-capture.sh "$reports"; then
@@ -143,6 +150,10 @@ if ! bash scripts/device-ci-capture.sh "$reports"; then
     fi
     exit 1
 fi
+[[ "$native_publication_failed" = 0 ]] || {
+    echo 'Native WebView accessibility publication failed; release remains blocked.' >&2
+    exit 1
+}
 for name in validation-login.png validation-reader.png validation-cache.png; do
     # Screenshots are optional diagnostics; JUnit and upgrade assertions above are mandatory.
     if "${adb_cmd[@]}" shell run-as com.fluxa.app.debug test -f "files/$name"; then

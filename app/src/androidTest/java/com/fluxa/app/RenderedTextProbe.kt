@@ -20,8 +20,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 internal object RenderedTextProbe {
     data class Frame(val host: WebView, val title: String?, val url: String?, val viewport: Rect,
+        val originX: Int, val originY: Int,
         val width: Int, val height: Int, val scrollX: Int, val scrollY: Int, val contentHeight: Int)
-    data class Text(val text: String, val screenBounds: Rect, val color: Int)
+    data class Text(val text: String, val screenBounds: Rect, val color: Int,
+        val geometry: String = "normalized-screen")
     data class Document(val frame: Frame, val texts: List<Text>) {
         fun exact(value: String): Text? = texts.filter { it.text == value }
             .minByOrNull { it.screenBounds.width().toLong() * it.screenBounds.height() }
@@ -38,7 +40,8 @@ internal object RenderedTextProbe {
             web.progress == 100 && web.contentHeight > 0 && !web.settings.javaScriptEnabled) {
             "Native document is not visually ready: title=${web.title}, progress=${web.progress}"
         }
-        return Frame(web, web.title, web.url, viewport, web.width, web.height,
+        val origin = IntArray(2).also(web::getLocationOnScreen)
+        return Frame(web, web.title, web.url, viewport, origin[0], origin[1], web.width, web.height,
             web.scrollX, web.scrollY, web.contentHeight)
     }
 
@@ -70,7 +73,7 @@ internal object RenderedTextProbe {
             lateinit var result: Document
             onWeb { web ->
                 check(frame(web) == before) { "Stale renderer snapshot: native host/document/viewport changed" }
-                result = Document(before, sink.texts())
+                result = Document(before, sink.texts(before))
             }
             return result
         } finally { sink.cancel() }
@@ -98,9 +101,10 @@ internal object RenderedTextProbe {
     }
 }
 
-/** Test-only sink. Chromium's public extras contain UNCLIPPED SCREEN coordinates; never
- * sum setDimens rectangles (the legacy and unified Assist implementations differ there).
- * Source: Chromium 149 AssistDataBuilder / ViewStructureBuilder / AccessibilityNodeInfoBuilder.
+/** Test-only sink. The legacy AssistantTree exports parent-relative unclipped rectangles
+ * plus pageAbsolute extras; unified AssistDataBuilder exports unclipped SCREEN rectangles.
+ * Detect that explicit schema, never a provider version or a guessed coordinate range.
+ * Source: Chromium ax_assistant_structure.cc, ViewStructureBuilder, AssistDataBuilder.
  */
 private class RenderedTextSink private constructor(
     private val state: State, private val depth: Int
@@ -115,21 +119,33 @@ private class RenderedTextSink private constructor(
     private var color: Int? = null
     private var html: HtmlInfo? = null
     fun cancel() { state.cancelled = true }
-    fun texts(): List<RenderedTextProbe.Text> = buildList {
-        fun visit(node: RenderedTextSink) {
+    fun texts(frame: RenderedTextProbe.Frame): List<RenderedTextProbe.Text> = buildList {
+        fun visit(node: RenderedTextSink, parentX: Int, parentY: Int, parentLegacy: Boolean?) {
             val keys = listOf("Left", "Top", "Right", "Bottom").map { "AccessibilityNodeInfo.unclipped$it" }
+            val absoluteKeys = listOf("Left", "Top", "Width", "Height").map { "AccessibilityNodeInfo.pageAbsolute$it" }
+            val hasBounds = keys.all(node.extras::containsKey)
+            val legacy = if (hasBounds) absoluteKeys.all(node.extras::containsKey) else parentLegacy
+            if (hasBounds && parentLegacy != null) check(legacy == parentLegacy) { "Mixed native geometry schemas" }
+            val bounds = if (hasBounds) Rect(node.extras.getInt(keys[0]), node.extras.getInt(keys[1]),
+                node.extras.getInt(keys[2]), node.extras.getInt(keys[3])) else null
+            // Legacy bounds are already in Android pixels and already contain the
+            // renderer's scroll transform. Accumulate parents, then add host origin ONCE.
+            if (legacy == true) bounds?.offset(parentX, parentY)
             val prose = node.text?.toString()
             if (node.depth > 1 && !prose.isNullOrBlank() && node.color != null &&
                 node.clazz != "android.webkit.WebView" && node.clazz?.contains("Image") != true &&
                 node.html?.attributes?.none { it.first == "display" && it.second == "none" } != false &&
-                keys.all(node.extras::containsKey)) {
-                val b = Rect(node.extras.getInt(keys[0]), node.extras.getInt(keys[1]),
-                    node.extras.getInt(keys[2]), node.extras.getInt(keys[3]))
-                if (b.width() > 1 && b.height() > 1) add(RenderedTextProbe.Text(prose, b, checkNotNull(node.color)))
+                bounds != null) {
+                val screen = Rect(bounds)
+                if (legacy == true) screen.offset(frame.originX, frame.originY)
+                if (screen.width() > 1 && screen.height() > 1) add(RenderedTextProbe.Text(prose, screen,
+                    checkNotNull(node.color), if (legacy == true) "legacy-parent-relative" else "unified-screen"))
             }
-            node.children.forEach { it?.let(::visit) }
+            node.children.forEach { child -> child?.let {
+                visit(it, bounds?.left ?: parentX, bounds?.top ?: parentY, legacy)
+            } }
         }
-        visit(this@RenderedTextSink)
+        visit(this@RenderedTextSink, 0, 0, null)
     }
     override fun setChildCount(num: Int) { children.clear(); addChildCount(num) }
     override fun addChildCount(num: Int): Int = children.size.also {

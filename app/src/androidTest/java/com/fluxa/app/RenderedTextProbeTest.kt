@@ -55,11 +55,12 @@ class RenderedTextProbeTest {
                                 </head><body><p>$body</p><p style="display:none">$hidden</p>
                                 <p style="visibility:hidden">INVISIBLE-$index</p>
                                 <p style="color:transparent">TRANSPARENT-$index</p>
-                                <div style="height:3000px"></div><p>$offscreen</p></body></html>
+                                <div style="height:120vh"></div><p>$offscreen</p></body></html>
                             """.trimIndent(), "text/html", "utf-8", null)
                         }
                     }
                     await { loaded.get() }
+                    onWeb { it.scrollTo(0, 0) }
                     await {
                         var ready = false
                         onWeb { ready = it.isShown && it.hasWindowFocus() && it.width > 0 &&
@@ -85,7 +86,17 @@ class RenderedTextProbeTest {
                         assertTrue("Blank output must fail despite valid renderer geometry",
                             runCatching { RenderedTextProbe.inkPixels(blank, text) }.isFailure)
                     } finally { blank.recycle() }
-                    android.util.Log.i("RenderedTextControl", "document=$index exactText=true visibleInk=true negativesPassed=true")
+                    // A native control can set its own scroll position to validate the observer's
+                    // transform. App screenshot framing still uses only real touch gestures.
+                    onWeb { it.scrollTo(0, it.height) }
+                    val scrolled = RenderedTextProbe.read(::onWeb, ::await)
+                    assertTrue(scrolled.frame.scrollY > 0)
+                    assertNull("Former top paragraph must become offscreen", scrolled.visible(body))
+                    val revealed = checkNotNull(scrolled.visible(offscreen)) { "Native scroll did not reveal actual lower paragraph: $scrolled" }
+                    val after = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                    try { assertTrue(RenderedTextProbe.inkPixels(after, revealed) >= 12) }
+                    finally { after.recycle() }
+                    android.util.Log.i("RenderedTextControl", "document=$index geometry=${text.geometry} exactText=true visibleInk=true negativesPassed=true scrollTransformPassed=true")
                 }
             } finally {
                 scenario.onActivity { web?.let { root.removeView(it); it.stopLoading(); it.destroy() }; web = null }

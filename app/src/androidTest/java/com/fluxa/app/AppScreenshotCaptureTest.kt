@@ -540,7 +540,8 @@ class AppScreenshotCaptureTest {
                     .put("javascriptEnabled", false).put("matchedText", target.text).put("requestedText", needle)
                     .put("bounds", bounds.toShortString()).put("screenBounds", JSONArray(listOf(
                         target.screenBounds.left, target.screenBounds.top, target.screenBounds.right, target.screenBounds.bottom)))
-                    .put("textColor", target.color).put("geometrySource", "public-assist-unclipped-screen-bounds")
+                    .put("textColor", target.color).put("geometrySource", "public-assist-normalized-screen-bounds")
+                    .put("providerGeometry", target.geometry)
                     .put("visible", document.visible(needle) != null)
                     .put("nativeRenderedTextMatched", true)
                     .put("accessibilityAssertion", "separate native provider control; not inferred from Assist") to

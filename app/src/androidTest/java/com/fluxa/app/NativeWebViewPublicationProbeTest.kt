@@ -16,7 +16,8 @@ import org.junit.Test
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Native control: no Fluxa reader, Compose, Assist or app stores.
+/** Native AX control: no Fluxa reader, Compose, Assist or app stores during the assertion.
+ * After an AX failure, collect an independent renderer observation without changing its result.
  * Run each path in a fresh instrumentation process so reload failure cannot skip replacement.
  */
 class NativeWebViewPublicationProbeTest {
@@ -128,6 +129,35 @@ class NativeWebViewPublicationProbeTest {
                                 check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                             }
                         } finally { bitmap.recycle() }
+                        // Observe the SAME failing document only after the native AX assertion
+                        // and its screenshot have failed. This cannot repair/retry the AX gate.
+                        runCatching {
+                            fun onWeb(action: (WebView) -> Unit) {
+                                scenario.onActivity { action(checkNotNull(web)) }
+                            }
+                            val rendered = RenderedTextProbe.read(::onWeb) { condition ->
+                                await("post-failure renderer observation $document", condition)
+                            }
+                            check(rendered.frame.title == "Native control $document" && rendered.frame.url == url)
+                            val paragraph = checkNotNull(rendered.visible(exact)) {
+                                "Same-document renderer did not expose completely visible exact prose: $rendered"
+                            }
+                            onWeb { check(RenderedTextProbe.frame(it) == rendered.frame) }
+                            val proof = checkNotNull(automation.takeScreenshot())
+                            try {
+                                onWeb { check(RenderedTextProbe.frame(it) == rendered.frame) }
+                                val ink = RenderedTextProbe.inkPixels(proof, paragraph)
+                                File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+                                    "native-webview-$label-rendered-proof.png").outputStream().use {
+                                    check(proof.compress(Bitmap.CompressFormat.PNG, 100, it))
+                                }
+                                Log.e(TAG, "document=$document exactNativeBody=false sameDocumentRenderedBody=true " +
+                                    "geometry=${paragraph.geometry} bounds=${paragraph.screenBounds} " +
+                                    "viewport=${rendered.frame.viewport} inkPixels=$ink")
+                            } finally { proof.recycle() }
+                        }.onFailure { diagnosis ->
+                            Log.e(TAG, "document=$document sameDocumentRenderedBody=false", diagnosis)
+                        }
                         throw failure
                     }
                 }
