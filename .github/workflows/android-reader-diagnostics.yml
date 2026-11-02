@@ -1,0 +1,179 @@
+name: Android reader diagnostics
+
+# Independent evidence only. This workflow has no release job or write permission.
+on:
+  push:
+    tags: [test-diagnostics-*]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fluxa-reader-diagnostics-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  reader:
+    name: Actual screenshots and interactions (API 36, known WebView 149)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      FLUXA_BUILD_COMMIT: ${{ github.sha }}
+      ANDROID_SERIAL: emulator-5554
+      PROVIDER_HARNESS_COMMIT: dcd5d4fcdf74d1f1ee9dd9300e00a99a24c54915
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+      - name: Build current application and tests
+        run: |
+          test "$(git rev-parse HEAD)" = "$FLUXA_BUILD_COMMIT"
+          mkdir -p reader-diagnostics
+          printf '%s\n' "$FLUXA_BUILD_COMMIT" > reader-diagnostics/BUILD_COMMIT.txt
+          git rev-parse HEAD:app > reader-diagnostics/APPLICATION_TREE.txt
+          printf '%s\n' 'DIAGNOSTIC ONLY: not complete device acceptance or release approval.' \
+            > reader-diagnostics/SCOPE.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            'cmdline-tools;22.0' 'platforms;android-37.0' 'build-tools;36.0.0' \
+            'emulator' 'platform-tools' 'system-images;android-36;google_apis;x86_64' \
+            'system-images;android-37.2;google_apis_ps16k;x86_64'
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - name: Prepare the previously verified diagnostic provider
+        timeout-minutes: 12
+        run: |
+          # Pin the already exercised donor/extraction code, not a guessed newer image.
+          # Production acceptance keeps its current >149 check and does not use this harness.
+          harness="$RUNNER_TEMP/fluxa-reader-provider-harness"
+          mkdir -p "$harness/scripts"
+          for file in device-webview-provider.sh webview_provider.py; do
+            git show "$PROVIDER_HARNESS_COMMIT:scripts/$file" > "$harness/scripts/$file"
+          done
+          printf '%s\n' "$PROVIDER_HARNESS_COMMIT" > reader-diagnostics/PROVIDER_HARNESS_COMMIT.txt
+          reports="$GITHUB_WORKSPACE/reader-diagnostics"
+          (cd "$harness" && bash scripts/device-webview-provider.sh prepare \
+            "$RUNNER_TEMP/fluxa-webview-provider" "$reports")
+          python3 - "$reports/webview-provider.json" <<'PY'
+          import json, sys
+          provider = json.load(open(sys.argv[1]))
+          assert provider['webview_version'] == '149.0.7827.5', provider
+          assert provider['webview_certificate_sha256'] == \
+              '6faf3c4140407473400934d117815a21af1cfefc5c0bee61c858bc3d72ba6fe5'
+          print('Known diagnostic provider verified; this is not the newer-provider release gate.')
+          PY
+      - name: Boot a fresh API 36 emulator
+        timeout-minutes: 15
+        run: |
+          test -c /dev/kvm
+          kvm_gid=$(getent group kvm | cut -d: -f3)
+          sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --clear-groups --no-new-privs \
+            -- "$ANDROID_HOME/emulator/emulator" -accel-check 2>&1 | tee reader-diagnostics/acceleration.txt
+          export ANDROID_USER_HOME="$RUNNER_TEMP/fluxa-reader-diagnostics-android"
+          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          "$ANDROID_HOME/cmdline-tools/22.0/bin/avdmanager" create avd --name fluxa-reader-diagnostics \
+            --package 'system-images;android-36;google_apis;x86_64' --device pixel_2 \
+            --path "$ANDROID_AVD_HOME/fluxa-reader-diagnostics.avd" <<< no
+          grep -Fx 'target=android-36' "$ANDROID_AVD_HOME/fluxa-reader-diagnostics.ini"
+          printf 'hw.cpu.ncore=2\nhw.ramSize=4096\nhw.keyboard=no\ndisk.dataPartition.size=6G\n' \
+            >> "$ANDROID_AVD_HOME/fluxa-reader-diagnostics.avd/config.ini"
+          printf 'ANDROID_USER_HOME=%s\nANDROID_AVD_HOME=%s\n' "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/platform-tools/adb" start-server
+          sudo -n setpriv --reuid "$(id -u)" --regid "$kvm_gid" --clear-groups --no-new-privs -- /usr/bin/env \
+            HOME="$HOME" USER="$USER" ANDROID_USER_HOME="$ANDROID_USER_HOME" ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            ANDROID_HOME="$ANDROID_HOME" ANDROID_SDK_ROOT="$ANDROID_HOME" \
+            "$ANDROID_HOME/emulator/emulator" -avd fluxa-reader-diagnostics -port 5554 \
+            -no-window -no-audio -no-snapshot -no-boot-anim -gpu swangle -feature -Vulkan -accel on \
+            > reader-diagnostics/emulator.log 2>&1 &
+          emulator_pid=$!
+          deadline=$((SECONDS + 600))
+          until [[ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]]; do
+            kill -0 "$emulator_pid" && (( SECONDS < deadline )) || { echo 'Emulator failed to boot.' >&2; exit 1; }
+            sleep 2
+          done
+          api=$("$ANDROID_HOME/platform-tools/adb" shell getprop ro.build.version.sdk | tr -d '\r')
+          page=$("$ANDROID_HOME/platform-tools/adb" shell getconf PAGESIZE | tr -d '\r')
+          test "$api" = 36 && test "$page" = 4096
+          printf 'API=%s\nPAGE_SIZE=%s\n' "$api" "$page" > reader-diagnostics/device.txt
+          for name in window_animation_scale transition_animation_scale animator_duration_scale; do
+            "$ANDROID_HOME/platform-tools/adb" shell settings put global "$name" 0
+          done
+          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
+          (cd "$RUNNER_TEMP/fluxa-reader-provider-harness" && bash scripts/device-webview-provider.sh install \
+            "$RUNNER_TEMP/fluxa-webview-provider" "$GITHUB_WORKSPACE/reader-diagnostics")
+      - name: Run unchanged renderer controls and actual screenshot and interaction flows
+        timeout-minutes: 15
+        run: |
+          adb="$ANDROID_HOME/platform-tools/adb"
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          app=app/build/outputs/apk/debug/app-debug.apk
+          tests=app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          test -z "$("$adb" shell pm path com.fluxa.app.debug)"
+          certificate() { "$signer" verify --print-certs "$1" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p'; }
+          app_certificate=$(certificate "$app")
+          test -n "$app_certificate" && test "$app_certificate" = "$(certificate "$tests")"
+          printf '%s\n' "$app_certificate" > reader-diagnostics/test-certificate-sha256.txt
+          "$adb" install --no-streaming "$app"
+          "$adb" install --no-streaming "$tests"
+          prior_services=$("$adb" shell settings get secure enabled_accessibility_services | tr -d '\r')
+          prior_accessibility=$("$adb" shell settings get secure accessibility_enabled | tr -d '\r')
+          [[ "$prior_services" = null || -z "$prior_services" ]]
+          restore() {
+            local status=$?
+            trap - EXIT
+            if [[ "$prior_services" = null ]]; then "$adb" shell settings delete secure enabled_accessibility_services || status=1
+            else "$adb" shell settings put secure enabled_accessibility_services "''" || status=1; fi
+            if [[ "$prior_accessibility" = null ]]; then "$adb" shell settings delete secure accessibility_enabled || status=1
+            else "$adb" shell settings put secure accessibility_enabled "$prior_accessibility" || status=1; fi
+            exit "$status"
+          }
+          trap restore EXIT
+          "$adb" shell settings put secure enabled_accessibility_services com.fluxa.app.debug.test/com.fluxa.app.ReaderAccessibilityService
+          "$adb" shell settings put secure accessibility_enabled 1
+          "$adb" shell settings put system accelerometer_rotation 0
+          "$adb" shell settings put system user_rotation 0
+          "$adb" shell settings put system font_scale 1.0
+          export FLUXA_READER_ACCESSIBILITY=true
+          export FLUXA_DEVICE_TEST_RUNNER=com.fluxa.app.ReaderAccessibilityRunner
+          timeout 120s "$adb" shell am instrument -w -e class com.fluxa.app.RenderedTextProbeTest \
+            -e readerAccessibilityService true "com.fluxa.app.debug.test/$FLUXA_DEVICE_TEST_RUNNER" \
+            | tee reader-diagnostics/rendered-text-controls.log
+          grep -Eq '^OK \(1 test\)' reader-diagnostics/rendered-text-controls.log
+          ! grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)|FAILURES!!!' reader-diagnostics/rendered-text-controls.log
+          bash scripts/device-ci-capture.sh reader-diagnostics
+          printf '%s\n' 'Diagnostic flows passed. Full release/provider/upgrade gates remain separate and unresolved.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve diagnostics
+        if: ${{ always() }}
+        timeout-minutes: 3
+        run: |
+          mkdir -p reader-diagnostics
+          adb="$ANDROID_HOME/platform-tools/adb"
+          timeout 15s "$adb" logcat -d > reader-diagnostics/logcat.log 2>&1 || true
+          timeout 15s "$adb" logcat -d -b crash > reader-diagnostics/crash-buffer.log 2>&1 || true
+          if timeout 10s "$adb" shell run-as com.fluxa.app.debug test -f files/reader-experience-failure.png; then
+            timeout 15s "$adb" exec-out run-as com.fluxa.app.debug cat files/reader-experience-failure.png \
+              > reader-diagnostics/reader-experience-failure.png || true
+          fi
+          timeout 10s "$adb" emu kill || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ always() }}
+        with:
+          name: fluxa-reader-diagnostics-api36
+          path: reader-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
