@@ -427,6 +427,36 @@ internal class DeviceFlowSync(
         showReaderControls()
     }
 
+    /** Visual/offline content check. Accessibility publication is tested separately by body()
+     * and the native provider control; Assist evidence must never be labelled AX success. */
+    fun renderedBody(bodyText: String) = step("cached rendered WebView body ready") {
+        await {
+            var ready = false
+            scenario.onActivity { activity ->
+                val web = views(activity.window.decorView).filterIsInstance<WebView>().singleOrNull()
+                ready = web != null && web.isShown && web.hasWindowFocus() &&
+                    web.progress == 100 && web.contentHeight > 0 && web.title == selectedTitle &&
+                    (web as? com.fluxa.app.ui.article.ReaderWebView)?.documentCovered == false
+            }
+            ready
+        }
+        val document = renderedDocument()
+        check(document.exact(bodyText) != null) { "Exact cached prose missing from current renderer: $bodyText" }
+        Log.i("FluxaDeviceFlow", "Exact renderer body matched; source=public-assist; title=${document.frame.title}; AX not asserted")
+        showReaderControls()
+    }
+
+    fun renderedDocument(): RenderedTextProbe.Document = RenderedTextProbe.read({ action ->
+        scenario.onActivity { activity ->
+            val web = views(activity.window.decorView).filterIsInstance<WebView>().single()
+            check(web.title == selectedTitle &&
+                (web as? com.fluxa.app.ui.article.ReaderWebView)?.documentCovered == false) {
+                "Selected reader document is covered or changed"
+            }
+            action(web)
+        }
+    }, ::await)
+
     /** Opt-in cache comparison; payload restricted to known fixture 0/1/2 paragraph zero. */
     private fun readerProviderProbe(bodyText: String) {
         val article = InstrumentationRegistry.getArguments().getString("readerProviderProbeAt") ?: "0"

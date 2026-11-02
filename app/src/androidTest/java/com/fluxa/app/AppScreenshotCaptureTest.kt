@@ -278,10 +278,27 @@ class AppScreenshotCaptureTest {
                         text(it).assertIsDisplayed()
                     }
                 }
+                if (proof?.optBoolean("nativeRenderedTextMatched") == true) scenario.onActivity {
+                    val web = views(it.window.decorView).filterIsInstance<WebView>().single()
+                    check(web.title == titles[0] && web.progress == 100 &&
+                        web.scrollY == proof.getInt("scrollY") && web.width == proof.getInt("width") &&
+                        web.height == proof.getInt("height") && web.contentHeight == proof.getInt("contentHeight")) {
+                        "Reader changed between geometry proof and capture"
+                    }
+                }
                 val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-                try { File(output, name).outputStream().use {
-                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
-                } } finally { bitmap.recycle() }
+                try {
+                    if (proof?.optBoolean("nativeRenderedTextMatched") == true) {
+                        val b = proof.getJSONArray("screenBounds")
+                        val text = RenderedTextProbe.Text(proof.getString("matchedText"),
+                            android.graphics.Rect(b.getInt(0), b.getInt(1), b.getInt(2), b.getInt(3)),
+                            proof.getInt("textColor"))
+                        proof.put("textInkPixels", RenderedTextProbe.inkPixels(bitmap, text))
+                    }
+                    File(output, name).outputStream().use {
+                        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
+                } finally { bitmap.recycle() }
                 inventory.put(JSONObject().put("file", name).put("caption", caption)
                     .put("contentOrigin", "Original local sample fixtures, not an authenticated account; any pre-existing cache is retained")
                     .put("nativeReader", proof ?: JSONObject.NULL))
@@ -317,7 +334,7 @@ class AppScreenshotCaptureTest {
                         firstTitle)
 
                     // Only the real reader transition marks this owned fixture read.
-                    sync.article(titles[0], click = true); sync.reader(titles[0]); sync.body(intro)
+                    sync.article(titles[0], click = true); sync.reader(titles[0]); sync.renderedBody(intro)
                     icon("返回文章列表"); sync.list()
                     // Do not scroll on return: preserve and verify the actual list anchor.
                     sync.settled(firstTitle)
@@ -389,7 +406,7 @@ class AppScreenshotCaptureTest {
                 icon("更多"); touch("账户与同步设置")
                 shot("12-account-sync.png", "账户与同步；不改变后台刷新开关", text("账户与同步"))
                 touch("完成")
-                sync.article(titles[0], click = true); sync.reader(titles[0]); sync.body(intro)
+                sync.article(titles[0], click = true); sync.reader(titles[0]); sync.renderedBody(intro)
                 val reader = compose.onNodeWithTag("reader-content")
                 shot("13-reader-hero.png", "18px / 1.8 浅色：标题、引言与河岸插画", reader,
                     reveal(sync, scenario, intro, move = false))
@@ -397,7 +414,7 @@ class AppScreenshotCaptureTest {
                 shot("14-reader-image.png", "原创河岸插画与图注", reader, reveal(sync, scenario, caption, .85f))
                 shot("15-reader-quote.png", "慢读章节与引文", reader, reveal(sync, scenario, quote, .35f))
                 shot("16-reader-code-table.png", "阅读笔记代码与观察表格", reader,
-                    reveal(sync, scenario, "val afternoon", .18f))
+                    reveal(sync, scenario, "val afternoon", .18f, fragment = true))
                 shot("17-reader-second-image.png", "第二幅窗边插画与正文", reader,
                     reveal(sync, scenario, secondCaption, .7f))
                 shot("18-reader-closing.png", "长文结尾与阅读留白", reader, reveal(sync, scenario, closing, .6f))
@@ -430,7 +447,7 @@ class AppScreenshotCaptureTest {
                         }
                         retained
                     }
-                    sync.body(intro)
+                    sync.renderedBody(intro)
                     shot(filename, "真实阅读主题：$label", reader, reveal(sync, scenario, intro, move = false))
                 }
                 theme("深色", "20-reader-dark.png")
@@ -447,7 +464,7 @@ class AppScreenshotCaptureTest {
                 shot("22-pending-sync.png", "离线缓存真实已读、收藏操作待同步；未连接账户", text("同步状态"))
                 touch("关闭")
                 // Append after the original 22 captures, leaving their viewports unchanged.
-                sync.article(titles[0], click = true); sync.reader(titles[0]); sync.body(intro)
+                sync.article(titles[0], click = true); sync.reader(titles[0]); sync.renderedBody(intro)
                 var originalOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 scenario.onActivity { originalOrientation = it.requestedOrientation }
                 fun awaitOrientation(expected: Int) = sync.await {
@@ -461,9 +478,9 @@ class AppScreenshotCaptureTest {
                     sync.step("landscape reader body and visible caption") {
                         sync.reader(titles[0])
                         // Rotation creates a new native document. Establish its visual
-                        // commit and real accessibility body before geometry sampling,
+                        // commit and exact rendered body before geometry sampling,
                         // just as on initial entry and after a palette change.
-                        sync.body(intro)
+                        sync.renderedBody(intro)
                         shot("23-reader-landscape.png", "真实横屏阅读：插画与图注", reader,
                             reveal(sync, scenario, secondCaption, .7f))
                     }
@@ -509,8 +526,28 @@ class AppScreenshotCaptureTest {
      * change the viewport. The inventory records progress/dimensions and actual visible prose.
      */
     private fun reveal(sync: DeviceFlowSync, scenario: ActivityScenario<MainActivity>, needle: String,
-        fraction: Float = .3f, move: Boolean = true): JSONObject {
+        fraction: Float = .3f, move: Boolean = true, fragment: Boolean = false): JSONObject {
         fun sample(): Pair<JSONObject, Float> {
+            if (!fragment) {
+                val document = sync.renderedDocument()
+                val target = checkNotNull(document.exact(needle)) { "Exact rendered paragraph missing: $needle" }
+                val frame = document.frame
+                val bounds = android.graphics.Rect(target.screenBounds).apply {
+                    offset(-frame.viewport.left, -frame.viewport.top)
+                }
+                return JSONObject().put("progress", 100).put("width", frame.width).put("height", frame.height)
+                    .put("contentHeight", frame.contentHeight).put("scrollY", frame.scrollY)
+                    .put("javascriptEnabled", false).put("matchedText", target.text).put("requestedText", needle)
+                    .put("bounds", bounds.toShortString()).put("screenBounds", JSONArray(listOf(
+                        target.screenBounds.left, target.screenBounds.top, target.screenBounds.right, target.screenBounds.bottom)))
+                    .put("textColor", target.color).put("geometrySource", "public-assist-unclipped-screen-bounds")
+                    .put("visible", document.visible(needle) != null)
+                    .put("nativeRenderedTextMatched", true)
+                    .put("accessibilityAssertion", "separate native provider control; not inferred from Assist") to
+                    (bounds.top - frame.height * fraction)
+            }
+            // Partial code text still requires native per-character geometry. A whole
+            // container's Assist rectangle cannot prove that a clipped substring is visible.
             var y = 0; var width = 0; var height = 0; var content = 0
             val viewport = android.graphics.Rect()
             scenario.onActivity {
@@ -565,11 +602,14 @@ class AppScreenshotCaptureTest {
             }
             val (proof, delta) = sample()
             if (proof.getBoolean("visible")) {
-                // fraction guides offscreen scrolling; it is not a pixel-perfect
-                // layout assertion. Once the paragraph fits, require real visible
-                // accessibility text rather than oscillating to align its baseline.
-                sync.await { sync.accessibilityText(visibleOnly = true).any { it.contains(needle) } }
-                return proof.put("accessibleVisibleTextMatched", true)
+                // fraction guides offscreen scrolling. Whole prose uses exact renderer
+                // text + complete bounds + screenshot ink; fragments retain the native
+                // per-character accessibility assertion above.
+                if (fragment) {
+                    sync.await { sync.accessibilityText(visibleOnly = true).any { it.contains(needle) } }
+                    proof.put("accessibleVisibleTextMatched", true)
+                }
+                return proof
             }
             check(move && attempt < 35) { "Native text not visibly reached: $proof" }
             nativeScroll(scenario, delta)

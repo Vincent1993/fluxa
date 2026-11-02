@@ -48,7 +48,7 @@ class OfflineAppFlowTest {
                     sync.scrollAndClick("直接阅读")
                     sync.article(title, click = true)
                     sync.reader(title)
-                    sync.body(bodyText)
+                    sync.renderedBody(bodyText)
                     compose.onNodeWithContentDescription("阅读设置").performTouchInput { click() }
                     val font = compose.onNodeWithTag("reader-font")
                     font.performScrollTo()
@@ -59,7 +59,7 @@ class OfflineAppFlowTest {
                     sync.settled(done)
                     done.performTouchInput { click() }
                     sync.reader(title)
-                    sync.body(bodyText)
+                    sync.renderedBody(bodyText)
                     val star = compose.onNodeWithContentDescription("收藏", useUnmergedTree = true)
                     sync.settled(star)
                     star.performTouchInput { click() }
@@ -96,7 +96,7 @@ class OfflineAppFlowTest {
                     sync.scrollAndClick("直接阅读")
                     sync.article(title, click = true)
                     sync.reader(title)
-                    sync.body(bodyText)
+                    sync.renderedBody(bodyText)
                     sync.settled(compose.onNodeWithContentDescription("取消收藏"))
                     compose.onNodeWithContentDescription("取消收藏").assertIsDisplayed()
                 }

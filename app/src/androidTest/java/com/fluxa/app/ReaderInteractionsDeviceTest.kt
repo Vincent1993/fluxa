@@ -317,17 +317,55 @@ class ReaderInteractionsDeviceTest {
             enter(sync)
             val row = compose.onNode(hasTestTag("article-swipe") and hasText(title(0)))
             row.performScrollTo()
-            row.performTouchInput {
-                val shallowRelease = minOf(176.dp.toPx(), (width - 48.dp.toPx()) * .5f) * .75f + 12.dp.toPx()
-                swipe(Offset(width * .8f, height / 2f), Offset(width * .8f - shallowRelease, height / 2f), 600)
+            sync.settled(row)
+            // Use the device's actual protected edges and touch slop, not assumed 24/12dp.
+            // Before UP, assert the same user-visible first-stage action as ArticleSwipeUiTest.
+            // After UP, verify each persisted effect separately so a failure identifies its action.
+            var leftEdge = 0f; var rightEdge = 0f; var slop = 0f
+            scenario.onActivity { activity ->
+                val density = activity.resources.displayMetrics.density
+                val gestures = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                    ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemGestures())
+                    ?: error("Real system gesture insets unavailable")
+                leftEdge = maxOf(24f * density, gestures.left.toFloat())
+                rightEdge = maxOf(24f * density, gestures.right.toFloat())
+                slop = android.view.ViewConfiguration.get(activity).scaledTouchSlop.toFloat()
             }
-            compose.onNodeWithTag("reader-content").assertDoesNotExist()
-            row.performTouchInput {
-                val shallowRelease = minOf(176.dp.toPx(), (width - 48.dp.toPx()) * .5f) * .75f + 12.dp.toPx()
-                swipe(Offset(width * .2f, height / 2f), Offset(width * .2f + shallowRelease, height / 2f), 600)
+            fun flags(): Pair<Boolean, Boolean> = runBlocking {
+                checkNotNull(db.dao().article(id(0))).let { it.isRead to it.isStarred }
             }
-            compose.onNodeWithTag("reader-content").assertDoesNotExist()
-            sync.await { runBlocking { db.dao().article(id(0))!!.let { it.isRead && it.isStarred } } }
+            fun shallow(left: Boolean, action: String, expected: Pair<Boolean, Boolean>) {
+                val before = flags()
+                row.performTouchInput {
+                    val deep = minOf(176.dp.toPx(), (width - leftEdge - rightEdge) * .5f)
+                    val start = Offset(if (left) width - rightEdge - 8.dp.toPx() else leftEdge + 8.dp.toPx(), height / 2f)
+                    val distance = deep * .75f + slop
+                    val end = start + Offset(if (left) -distance else distance, 0f)
+                    check(start.x > leftEdge && start.x < width - rightEdge && end.x > 0 && end.x < width)
+                    down(start); moveTo(end, 600)
+                }
+                var released = false
+                try {
+                    val preview = compose.onNodeWithTag("article-swipe-preview", useUnmergedTree = true)
+                    sync.await { compose.onAllNodesWithTag("article-swipe-preview", useUnmergedTree = true)
+                        .fetchSemanticsNodes().isNotEmpty() }
+                    preview.assertContentDescriptionEquals(action)
+                        .assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,
+                            "第一段·$action·松手执行，拖回取消"))
+                    assertEquals("Preview cannot persist before release: $action", before, flags())
+                    row.performTouchInput { up() }; released = true
+                } finally { if (!released) row.performTouchInput { cancel() } }
+                compose.onNodeWithTag("reader-content").assertDoesNotExist()
+                try { sync.await { flags() == expected } }
+                catch (failure: AssertionError) {
+                    throw AssertionError("First-stage $action failed after verified preview and UP: " +
+                        "before=$before expected=$expected actual=${flags()} edges=$leftEdge/$rightEdge slop=$slop", failure)
+                }
+                android.util.Log.i("ReaderInteractions", "First-stage $action persisted=${flags()}")
+            }
+            assertEquals(false to false, flags())
+            shallow(left = true, action = "标记已读", expected = true to false)
+            shallow(left = false, action = "收藏", expected = true to true)
             val anchor = sync.listAnchor(title(0), "before-open")
             // Open the measured node without another scroll-to changing the anchor.
             compose.onNodeWithText(title(0), substring = false).performTouchInput { click() }

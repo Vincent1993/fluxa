@@ -14,6 +14,7 @@ com.fluxa.app.NotificationRoutingTest
 com.fluxa.app.OfflineAppFlowTest
 com.fluxa.app.ReaderActionsDeviceTest
 com.fluxa.app.ReadingRedesignUiTest
+com.fluxa.app.RenderedTextProbeTest
 com.fluxa.app.SavedArticleNavigationTest
 com.fluxa.app.SecurityInstrumentedTest
 com.fluxa.app.UpgradePreservationTest
