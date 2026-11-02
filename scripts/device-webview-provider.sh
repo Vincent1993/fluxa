@@ -26,7 +26,8 @@ root = E.parse(sys.argv[1]).getroot()
 package = next(p for p in root.iter() if p.tag.endswith('localPackage'))
 assert package.attrib['path'] == 'system-images;android-37.2;google_apis_ps16k;x86_64'
 revision = next(p for p in package if p.tag.endswith('revision'))
-assert next(p.text for p in revision if p.tag.endswith('major')) == '6'
+actual_revision = next(p.text for p in revision if p.tag.endswith('major'))
+assert actual_revision == '7', f'Expected official SDK image revision 7, got {actual_revision}'
 PY
     donor_user="$RUNNER_TEMP/fluxa-webview-source-android"
     donor_avd="$donor_user/avd"
