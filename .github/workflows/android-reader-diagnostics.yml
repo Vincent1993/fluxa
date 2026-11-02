@@ -114,8 +114,8 @@ jobs:
             "$ANDROID_HOME/platform-tools/adb" shell settings put global "$name" 0
           done
           "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82
-          (cd "$RUNNER_TEMP/fluxa-reader-provider-harness" && bash scripts/device-webview-provider.sh install \
-            "$RUNNER_TEMP/fluxa-webview-provider" "$GITHUB_WORKSPACE/reader-diagnostics")
+          bash scripts/device-webview-provider.sh install \
+            "$RUNNER_TEMP/fluxa-webview-provider" "$GITHUB_WORKSPACE/reader-diagnostics"
       - name: Run unchanged renderer controls and actual screenshot and interaction flows
         timeout-minutes: 15
         run: |

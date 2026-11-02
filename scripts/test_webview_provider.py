@@ -1,3 +1,9 @@
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -90,6 +96,95 @@ class ProviderManifestTest(unittest.TestCase):
             self.web.set(ANDROID + "versionName", old_version)
             with self.subTest(version=old_version), self.assertRaisesRegex(ValueError, "newer"):
                 self.validate()
+
+
+class ProviderInstallReadinessTest(unittest.TestCase):
+    """Run the actual installer helper with fake SDK tools and non-APK fixtures."""
+
+    def run_install(self, mode):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            provider = root / 'fluxa-webview-provider'
+            provider.mkdir()
+            for name in ('WebViewGoogle.apk', 'TrichromeLibrary.apk'):
+                (provider / name).write_bytes(b'NON_APK_STUB')
+            digest = hashlib.sha256(b'NON_APK_STUB').hexdigest()
+            (provider / 'SHA256SUMS').write_text(''.join(
+                digest + '  ' + name + '\n' for name in ('WebViewGoogle.apk', 'TrichromeLibrary.apk')))
+            reports = root / 'reports'
+            reports.mkdir()
+            (reports / 'webview-provider.json').write_text(json.dumps({
+                'webview_version': '149.0.7827.5', 'trichrome_required': False}))
+            sdk = root / 'sdk'
+            adb = sdk / 'platform-tools/adb'
+            adb.parent.mkdir(parents=True)
+            adb.write_text(r'''#!/usr/bin/env python3
+import os, pathlib, sys
+args = sys.argv[3:]
+root = pathlib.Path(os.environ['RUNNER_TEMP'])
+with (root / 'calls').open('a') as stream:
+    stream.write(' '.join(args) + '\n')
+if args[:2] == ['shell', 'getprop']:
+    print('36')
+elif args[:3] == ['shell', 'pm', 'path']:
+    print('package:/data/app/WebViewGoogle.apk')
+elif args[0] == 'pull':
+    pathlib.Path(args[-1]).write_bytes(b'NON_APK_STUB')
+elif args[0] == 'install':
+    if os.environ['TEST_MODE'] == 'install_failure':
+        print('Failure [INSTALL_FAILED_TEST]')
+        sys.exit(1)
+    (root / 'installed').touch()
+    print('Success')
+elif args[:2] == ['shell', 'dumpsys']:
+    count_file = root / 'observations'
+    count = int(count_file.read_text()) + 1 if count_file.exists() else 1
+    count_file.write_text(str(count))
+    version = '149.0.7827.5' if os.environ['TEST_MODE'] == 'eventual' and count >= 3 else '133.0.6943.137'
+    print('Current WebView package (name, version): (com.google.android.webview, ' + version + ')')
+    if (root / 'installed').exists():
+        print('Preferred WebView package (name, version): (com.google.android.webview, 149.0.7827.5)')
+''')
+            adb.chmod(0o755)
+            signer = sdk / 'build-tools/36.0.0/apksigner'
+            signer.parent.mkdir(parents=True)
+            signer.write_text('#!/bin/bash\necho "Signer #1 certificate SHA-256 digest: PUBLIC_STUB"\n')
+            signer.chmod(0o755)
+            bin_dir = root / 'bin'
+            bin_dir.mkdir()
+            checksum = bin_dir / 'sha256sum'
+            checksum.write_text('''#!/usr/bin/env python3
+import hashlib, pathlib, sys
+for line in pathlib.Path(sys.argv[2]).read_text().splitlines():
+    digest, name = line.split()
+    assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() == digest
+''')
+            checksum.chmod(0o755)
+            env = dict(os.environ, GITHUB_ACTIONS='true', RUNNER_OS='Linux',
+                       RUNNER_TEMP=str(root), ANDROID_HOME=str(sdk),
+                       ANDROID_SERIAL='emulator-5554', TEST_MODE=mode,
+                       PATH=str(bin_dir) + os.pathsep + os.environ['PATH'])
+            result = subprocess.run(['bash', str(Path(__file__).with_name('device-webview-provider.sh')),
+                                     'install', str(provider), str(reports)], env=env,
+                                    capture_output=True, text=True, timeout=40)
+            return result, (root / 'calls').read_text()
+
+    def test_installer_success_waits_for_actual_active_version(self):
+        result, calls = self.run_install('eventual')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(calls.count('shell dumpsys webviewupdate'), 3)
+        self.assertEqual(calls.count('install --no-streaming -r'), 1)
+
+    def test_preferred_version_without_active_switch_fails(self):
+        result, _ = self.run_install('never')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('did not become the active provider', result.stderr)
+
+    def test_installation_failure_is_not_retried_or_accepted(self):
+        result, calls = self.run_install('install_failure')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls.count('install --no-streaming -r'), 1)
+        self.assertEqual(calls.count('shell dumpsys webviewupdate'), 1)
 
 
 if __name__ == "__main__":

@@ -74,7 +74,9 @@ elif [[ "$mode" = install ]]; then
     [[ "$api" = 36 || "$api" = 37 ]] || exit 1
     (cd "$provider" && sha256sum -c SHA256SUMS)
     "$adb" -s "$ANDROID_SERIAL" shell dumpsys webviewupdate > "$reports/webview-before-update.txt"
-    mapfile -t paths < <("$adb" -s "$ANDROID_SERIAL" shell pm path com.google.android.webview | tr -d '\r' | sed 's/^package://')
+    paths=()
+    while IFS= read -r package_path; do paths+=("$package_path"); done \
+        < <("$adb" -s "$ANDROID_SERIAL" shell pm path com.google.android.webview | tr -d '\r' | sed 's/^package://')
     [[ ${#paths[@]} = 1 && "${paths[0]}" = /*.apk ]] || exit 1
     "$adb" -s "$ANDROID_SERIAL" pull "${paths[0]}" "$provider/original-WebView.apk"
     original_cert=$(certificate "$provider/original-WebView.apk")
@@ -90,8 +92,20 @@ elif [[ "$mode" = install ]]; then
     "$adb" -s "$ANDROID_SERIAL" shell dumpsys webviewupdate > "$reports/webview-after-update.txt"
     version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["webview_version"])' \
         "$reports/webview-provider.json")
-    grep -F "Current WebView package (name, version): (com.google.android.webview, $version)" \
-        "$reports/webview-after-update.txt"
+    # Package installation and WebViewUpdateService's package-change handling are
+    # asynchronous. Require the same exact active provider, after it is published;
+    # a successful installer or a merely preferred/available package is insufficient.
+    ready_deadline=$((SECONDS + 30))
+    until grep -F "Current WebView package (name, version): (com.google.android.webview, $version)" \
+            "$reports/webview-after-update.txt"; do
+        (( SECONDS < ready_deadline )) || {
+            cat "$reports/webview-after-update.txt" >&2
+            echo 'Installed WebView did not become the active provider within 30 seconds.' >&2
+            exit 1
+        }
+        sleep 1
+        "$adb" -s "$ANDROID_SERIAL" shell dumpsys webviewupdate > "$reports/webview-after-update.txt"
+    done
 else
     echo 'Unsupported provider operation.' >&2; exit 1
 fi
