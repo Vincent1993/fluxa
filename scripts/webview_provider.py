@@ -15,15 +15,24 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def android_attribute(element, name):
+    # apkanalyzer's decoded XML can omit the Android attribute namespace.
+    namespaced = element.get(ANDROID + name)
+    plain = element.get(name)
+    require(namespaced is None or plain is None or namespaced == plain,
+            f"Conflicting Android attribute: {name}")
+    return namespaced if namespaced is not None else plain or ""
+
+
 def validate(web, library, web_cert, library_cert):
     for cert in (web_cert, library_cert):
         require(re.fullmatch(r"[0-9a-f]{64}", cert), "Expected one verified SHA256 signer")
     require(web.get("package") == "com.google.android.webview", "Unexpected WebView package")
-    version = web.get(ANDROID + "versionName", "")
+    version = android_attribute(web, "versionName")
     require(re.fullmatch(r"\d+\.\d+\.\d+\.\d+", version), "Invalid WebView version")
     require(tuple(map(int, version.split("."))) > (145, 0, 7632, 218),
             "New SDK provider must be newer than the failing WebView 145 control")
-    require(int(web.find("uses-sdk").get(ANDROID + "minSdkVersion")) <= 36,
+    require(int(android_attribute(web.find("uses-sdk"), "minSdkVersion")) <= 36,
             "WebView does not support the API 36 target")
     dependencies = web.findall("application/uses-static-library")
     require(len(dependencies) <= 1, "Unexpected additional WebView static dependencies")
@@ -32,15 +41,15 @@ def validate(web, library, web_cert, library_cert):
         exported = library.find("application/static-library")
         require(library.get("package") == LIBRARY and exported is not None,
                 "Missing Trichrome static library")
-        require(int(library.find("uses-sdk").get(ANDROID + "minSdkVersion")) <= 36,
+        require(int(android_attribute(library.find("uses-sdk"), "minSdkVersion")) <= 36,
                 "Trichrome does not support API 36")
-        require(dependency.get(ANDROID + "name") == exported.get(ANDROID + "name") == LIBRARY,
+        require(android_attribute(dependency, "name") == android_attribute(exported, "name") == LIBRARY,
                 "Static library name mismatch")
-        library_version = dependency.get(ANDROID + "version", "")
+        library_version = android_attribute(dependency, "version")
         require(re.fullmatch(r"[0-9]+", library_version) and
-                library_version == exported.get(ANDROID + "version"),
+                library_version == android_attribute(exported, "version"),
                 "Static library version mismatch")
-        digest = dependency.get(ANDROID + "certDigest", "").replace(":", "").lower()
+        digest = android_attribute(dependency, "certDigest").replace(":", "").lower()
         require(digest == library_cert, "Static library certificate mismatch")
     return {"webview_version": version, "webview_certificate_sha256": web_cert,
             "trichrome_certificate_sha256": library_cert,

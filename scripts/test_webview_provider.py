@@ -24,6 +24,37 @@ class ProviderManifestTest(unittest.TestCase):
     def validate(self):
         return validate(self.web, self.library, self.web_cert, self.library_cert)
 
+    def use_analyzer_attributes(self):
+        # cmdline-tools 22.0 `apkanalyzer manifest print` omits the Android namespace.
+        for root in (self.web, self.library):
+            for element in root.iter():
+                for name in list(element.attrib):
+                    if name.startswith(ANDROID):
+                        element.set(name[len(ANDROID):], element.attrib.pop(name))
+
+    def test_analyzer_standalone_manifest_preserves_version_and_sdk_checks(self):
+        self.web.set(ANDROID + "versionName", "149.0.7827.5")
+        self.use_analyzer_attributes()
+        result = self.validate()
+        self.assertEqual("149.0.7827.5", result["webview_version"])
+        self.assertFalse(result["trichrome_required"])
+        self.web.find("uses-sdk").set("minSdkVersion", "37")
+        with self.assertRaisesRegex(ValueError, "API 36"):
+            self.validate()
+
+    def test_analyzer_dependency_still_requires_matching_library_certificate(self):
+        dependency = self.dependency()
+        self.use_analyzer_attributes()
+        self.assertTrue(self.validate()["trichrome_required"])
+        dependency.set("certDigest", self.web_cert)
+        with self.assertRaisesRegex(ValueError, "certificate mismatch"):
+            self.validate()
+
+    def test_conflicting_attribute_formats_are_rejected(self):
+        self.web.set("versionName", "145.0.7632.218")
+        with self.assertRaisesRegex(ValueError, "Conflicting Android attribute: versionName"):
+            self.validate()
+
     def test_standalone_webview_does_not_install_unrelated_library(self):
         self.assertFalse(self.validate()["trichrome_required"])
 
