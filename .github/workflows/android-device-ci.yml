@@ -62,7 +62,7 @@ jobs:
             "platforms;android-37.0" "build-tools;36.0.0" "emulator" "platform-tools" \
             "system-images;android-$TEST_API;$TEST_TAG;x86_64"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-            'system-images;android-37.2;google_apis_ps16k;x86_64'
+            'system-images;android-canary-20261007;google_apis_ps16k;x86_64'
       - name: Build old and new APKs with the same ephemeral test certificate
         run: |
           git worktree add --detach ../fluxa-upgrade-baseline b61c6d97995dd79f3c2ff549da28a6f802471d77

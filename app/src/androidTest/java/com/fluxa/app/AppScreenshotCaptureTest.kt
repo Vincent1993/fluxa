@@ -309,7 +309,15 @@ class AppScreenshotCaptureTest {
             }
             fun filter(label: String) {
                 compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription(label))
-                touch(label); compose.onNodeWithContentDescription(label).assertIsSelected()
+                touch(label)
+                // FeedListViewModel projects filters on its background dispatcher. Compose
+                // being idle after UP does not mean that projection has reached the UI yet.
+                // Observe this one click's result; never repeat it or change the filter directly.
+                sync.await {
+                    compose.onAllNodes(hasContentDescription(label) and isSelected())
+                        .fetchSemanticsNodes().size == 1
+                }
+                compose.onNodeWithContentDescription(label).assertIsSelected()
             }
             fun query(value: String) {
                 val field = text("搜索文章")

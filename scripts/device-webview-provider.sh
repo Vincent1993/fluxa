@@ -18,23 +18,25 @@ certificate() { "$signer" verify --print-certs "$1" | sed -n 's/^Signer #1 certi
 if [[ "$mode" = prepare ]]; then
     [[ ! -e "$provider" ]] || { echo 'Provider directory already exists.' >&2; exit 1; }
     mkdir -p "$provider"
-    image="$ANDROID_HOME/system-images/android-37.2/google_apis_ps16k/x86_64"
+    # Use a later official donor while the actual acceptance AVDs remain API 36/37.
+    # No image, package signature, minSDK or Android install checks are bypassed.
+    image="$ANDROID_HOME/system-images/android-canary-20261007/google_apis_ps16k/x86_64"
     cp "$image/package.xml" "$reports/webview-source-image.xml"
     python3 - "$image/package.xml" <<'PY'
 import sys, xml.etree.ElementTree as E
 root = E.parse(sys.argv[1]).getroot()
 package = next(p for p in root.iter() if p.tag.endswith('localPackage'))
-assert package.attrib['path'] == 'system-images;android-37.2;google_apis_ps16k;x86_64'
+assert package.attrib['path'] == 'system-images;android-canary-20261007;google_apis_ps16k;x86_64'
 revision = next(p for p in package if p.tag.endswith('revision'))
 actual_revision = next(p.text for p in revision if p.tag.endswith('major'))
-assert actual_revision == '7', f'Expected official SDK image revision 7, got {actual_revision}'
+assert actual_revision == '17', f'Expected official SDK image revision 17, got {actual_revision}'
 PY
     donor_user="$RUNNER_TEMP/fluxa-webview-source-android"
     donor_avd="$donor_user/avd"
     mkdir -p "$donor_avd"
     ANDROID_USER_HOME="$donor_user" ANDROID_AVD_HOME="$donor_avd" \
         "$ANDROID_HOME/cmdline-tools/22.0/bin/avdmanager" create avd \
-        --name fluxa-webview-source --package 'system-images;android-37.2;google_apis_ps16k;x86_64' \
+        --name fluxa-webview-source --package 'system-images;android-canary-20261007;google_apis_ps16k;x86_64' \
         --device pixel_2 --path "$donor_avd/fluxa-webview-source.avd" <<< no
     printf 'hw.cpu.ncore=2\nhw.ramSize=2048\nhw.keyboard=no\n' >> "$donor_avd/fluxa-webview-source.avd/config.ini"
     "$adb" start-server

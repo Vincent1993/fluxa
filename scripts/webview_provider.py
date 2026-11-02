@@ -30,8 +30,8 @@ def validate(web, library, web_cert, library_cert):
     require(web.get("package") == "com.google.android.webview", "Unexpected WebView package")
     version = android_attribute(web, "versionName")
     require(re.fullmatch(r"\d+\.\d+\.\d+\.\d+", version), "Invalid WebView version")
-    require(tuple(map(int, version.split("."))) > (145, 0, 7632, 218),
-            "New SDK provider must be newer than the failing WebView 145 control")
+    require(tuple(map(int, version.split("."))) > (149, 0, 7827, 5),
+            "New SDK provider must be newer than the failing WebView 149 control")
     require(int(android_attribute(web.find("uses-sdk"), "minSdkVersion")) <= 36,
             "WebView does not support the API 36 target")
     dependencies = web.findall("application/uses-static-library")

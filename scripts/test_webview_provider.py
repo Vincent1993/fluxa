@@ -33,10 +33,10 @@ class ProviderManifestTest(unittest.TestCase):
                         element.set(name[len(ANDROID):], element.attrib.pop(name))
 
     def test_analyzer_standalone_manifest_preserves_version_and_sdk_checks(self):
-        self.web.set(ANDROID + "versionName", "149.0.7827.5")
+        self.web.set(ANDROID + "versionName", "156.0.8078.48")
         self.use_analyzer_attributes()
         result = self.validate()
-        self.assertEqual("149.0.7827.5", result["webview_version"])
+        self.assertEqual("156.0.8078.48", result["webview_version"])
         self.assertFalse(result["trichrome_required"])
         self.web.find("uses-sdk").set("minSdkVersion", "37")
         with self.assertRaisesRegex(ValueError, "API 36"):
@@ -86,9 +86,10 @@ class ProviderManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "API 36"):
             self.validate()
         self.web.find("uses-sdk").set(ANDROID + "minSdkVersion", "32")
-        self.web.set(ANDROID + "versionName", "145.0.7632.218")
-        with self.assertRaisesRegex(ValueError, "newer"):
-            self.validate()
+        for old_version in ("145.0.7632.218", "149.0.7827.5"):
+            self.web.set(ANDROID + "versionName", old_version)
+            with self.subTest(version=old_version), self.assertRaisesRegex(ValueError, "newer"):
+                self.validate()
 
 
 if __name__ == "__main__":
