@@ -130,6 +130,13 @@ jobs:
           printf '%s\n' "$app_certificate" > reader-diagnostics/test-certificate-sha256.txt
           "$adb" install --no-streaming "$app"
           "$adb" install --no-streaming "$tests"
+          # Installation returns before AccessibilityManager processes PACKAGE_ADDED.
+          # Enabling an as-yet undiscovered component lets updateServicesLocked remove
+          # it from the enabled list. Drain the existing package broadcasts and their
+          # registered loopers; do not sleep, alter service policy or retry assertions.
+          timeout 60s "$adb" shell am wait-for-broadcast-barrier --flush-broadcast-loopers \
+            | tee reader-diagnostics/package-broadcast-barrier.log
+          "$adb" shell dumpsys accessibility > reader-diagnostics/accessibility-before-enable.txt
           prior_services=$("$adb" shell settings get secure enabled_accessibility_services | tr -d '\r')
           prior_accessibility=$("$adb" shell settings get secure accessibility_enabled | tr -d '\r')
           [[ "$prior_services" = null || -z "$prior_services" ]]
@@ -155,6 +162,7 @@ jobs:
             | tee reader-diagnostics/rendered-text-controls.log
           grep -Eq '^OK \(1 test\)' reader-diagnostics/rendered-text-controls.log
           ! grep -Eq '^INSTRUMENTATION_STATUS_CODE: -(3|4)|FAILURES!!!' reader-diagnostics/rendered-text-controls.log
+          "$adb" shell dumpsys accessibility > reader-diagnostics/accessibility-after-controls.txt
           bash scripts/device-ci-capture.sh reader-diagnostics
           printf '%s\n' 'Diagnostic flows passed. Full release/provider/upgrade gates remain separate and unresolved.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve diagnostics
